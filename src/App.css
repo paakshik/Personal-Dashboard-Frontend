@@ -1,0 +1,222 @@
+/* ☀️ Global Minimalist/Apple-like Light Theme */
+:root {
+  --bg-main: #ffffff; /* Very light, slightly off-white background */
+  --bg-card: #ffffff;
+  --bg-card-hover: #fcfcfc;
+  
+  --text-main: #1d1d1f; /* Near-black for high contrast */
+  --text-muted: #6e6e73; /* Subtle gray for details */
+  --accent-blue: #007aff; /* Apple Blue */
+  --accent-red: #e44332; /* Existing Todoist Red, used for focus */
+
+  --radius-lg: 16px;
+  --radius-sm: 8px;
+  --shadow-subtle: 0 4px 12px rgba(0, 0, 0, 0.06); /* Subtle lift */
+  --transition: 0.25s ease;
+}
+
+* {
+  /* Switched to 'Inter' as a more modern, common sans-serif font */
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  transition: var(--transition);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--bg-main);
+  color: var(--text-main);
+}
+
+/* Cards (Minimalist Lift) */
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-subtle);
+  border: 1px solid #ededed;
+}
+
+.card:hover {
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+}
+
+/* Fade-in animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Custom Scrollbar (Subtle) */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d1d6;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+/* Add this to App.css or a global stylesheet */
+@keyframes spin {
+    from {
+        /* Start at 0 degrees rotation */
+        transform: rotate(0deg);
+    }
+    to {
+        /* End at 360 degrees rotation */
+        transform: rotate(360deg);
+    }
+}
+/* Add to the end of your App.css file */
+
+/* Command Nexus Styles */
+.commandnexus-container {
+  background: var(--bg-main);
+  color: var(--text-main);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-subtle);
+}
+
+/* Metric Card Styles */
+.metric-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 25px;
+  margin-bottom: 20px;
+  border: 1px solid #e0e0e0;
+  box-shadow: var(--shadow-subtle);
+}
+
+.metric-card:hover {
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+}
+
+.metric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.metric-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-main);
+  text-transform: uppercase;
+}
+
+.metric-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--accent-blue);
+}
+
+.metric-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 15px;
+}
+
+.progress-container {
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 15px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-blue) 0%, #3b82f6 100%);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+/* Command Input Styles */
+.command-input-container {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.command-input {
+  flex: 1;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid #d1d1d6;
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  font-size: 1rem;
+}
+
+.command-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+
+.execute-button {
+  background: var(--accent-blue);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.execute-button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* Snippet Grid */
+.snippets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.snippet-card {
+  background: var(--bg-card);
+  border: 1px solid #e0e0e0;
+  border-radius: var(--radius-sm);
+  padding: 15px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.snippet-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-blue);
+  transform: translateY(-2px);
+}
+
+.snippet-command {
+  font-family: 'Courier New', monospace;
+  color: var(--accent-blue);
+  font-weight: 600;
+  margin-bottom: 5px;
+  font-size: 0.9rem;
+}
+
+.snippet-description {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
