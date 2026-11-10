@@ -152,7 +152,7 @@ function App() {
                                      refreshData={() => refreshViewData('projects')}/>,
         commands: <CommandNexus commands={commands} isLoading={loading}
                                 refreshData={() => refreshViewData('commands')}/>,
-        AI: <AiView axiosInstance={api} setActiveView={setActiveView}/>,
+        AI: <AiView axiosInstance={api} setActiveView={setActiveView} refreshData={refreshData}/>,
     };
     return <div style={{minHeight: '100vh', color: 'var(--text-main)', backgroundColor: 'var(--bg-main)'}}>
         <Navbar activeView={activeView} setActiveView={setActiveView} refreshData={refreshData} loading={loading}
