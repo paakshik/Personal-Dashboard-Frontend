@@ -67,6 +67,26 @@ export async function getWebSocketTicketUrl(path, ticketEndpoint = '/dashboard/s
 }
 
 /**
+ * List the authenticated user's saved conversations.
+ * GET /dashboard/gemini/conversations
+ * Returns an array of {id, title, preview, message_count, created_at, updated_at}.
+ */
+export async function fetchConversations() {
+    const res = await api.get('/dashboard/gemini/conversations');
+    return res.data;
+}
+
+/**
+ * Fetch the full message history for a single conversation.
+ * GET /dashboard/gemini/conversations/{id}
+ * Returns an array of {id, role, text, timestamp, attachment_id?}.
+ */
+export async function fetchConversationMessages(id) {
+    const res = await api.get(`/dashboard/gemini/conversations/${encodeURIComponent(id)}`);
+    return res.data;
+}
+
+/**
  * Check whether the authenticated user is the dashboard owner.
  * Calls the owner-gated /dashboard/system/current endpoint; a 403 means not owner.
  */

@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {fetchBriefing} from '../api.jsx';
 import {Calendar, CheckCircle, Folder, Mail, Plus, RefreshCw, Sparkles,} from 'lucide-react';
 import {TrophySpin} from 'react-loading-indicators';

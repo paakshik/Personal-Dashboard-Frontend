@@ -2,7 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {ArrowUp, Check, Clock, Paperclip, RefreshCw, Sparkles, Trash2, X} from 'lucide-react';
-import {getWebSocketTicketUrl} from '../api';
+import {fetchConversationMessages, fetchConversations, getWebSocketTicketUrl} from '../api';
 
 const SUGGESTIONS = [
     'What is on my calendar this week?',
@@ -17,6 +17,13 @@ const STATUS_LABEL = {
     error: 'Connection failed',
 };
 
+const formatDate = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+};
+
 export default function AiView({axiosInstance, refreshData}) {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
@@ -26,13 +33,20 @@ export default function AiView({axiosInstance, refreshData}) {
     const [pendingApprovals, setPendingApprovals] = useState([]);
     const [connectKey, setConnectKey] = useState(0);
 
+    // History panel state
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const [conversations, setConversations] = useState([]);
+    const [conversationsLoading, setConversationsLoading] = useState(false);
+    const [conversationsError, setConversationsError] = useState(null);
+    // The id of the conversation currently displayed in the main window. New
+    // messages are sent with this id so they append to the right conversation.
+    const [activeConversationId, setActiveConversationId] = useState(null);
+
     const ws = useRef(null);
     const fileRef = useRef(null);
     const endRef = useRef(null);
     const textareaRef = useRef(null);
     const loadingRef = useRef(false);
-    // Keep the latest axios instance in a ref so a new instance from the parent
-    // never forces the WebSocket effect below to reconnect.
     const axiosRef = useRef(axiosInstance);
 
     useEffect(() => {
@@ -48,7 +62,7 @@ export default function AiView({axiosInstance, refreshData}) {
         setMessages((previous) => [...previous, {role, text, timestamp: new Date().toISOString()}]);
     }, []);
 
-    // Load history once.
+    // Load the current conversation once.
     useEffect(() => {
         let cancelled = false;
         axiosRef.current
@@ -61,6 +75,50 @@ export default function AiView({axiosInstance, refreshData}) {
             cancelled = true;
         };
     }, []);
+
+    // Load the saved conversation list when the history panel is opened.
+    useEffect(() => {
+        if (!historyOpen) return;
+        let cancelled = false;
+        (async () => {
+            setConversationsLoading(true);
+            setConversationsError(null);
+            try {
+                const data = await fetchConversations();
+                if (!cancelled) setConversations(Array.isArray(data) ? data : []);
+            } catch (error) {
+                if (!cancelled) {
+                    setConversationsError('Could not load your conversation history.');
+                    console.error('Failed to load conversations', error);
+                }
+            } finally {
+                if (!cancelled) setConversationsLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [historyOpen]);
+
+    const selectConversation = async (conversation) => {
+        setActiveConversationId(conversation.id);
+        try {
+            const data = await fetchConversationMessages(conversation.id);
+            const restored = Array.isArray(data) ? data : [];
+            setMessages(
+                restored.map((m) => ({
+                    id: m.id,
+                    role: m.role,
+                    text: m.text,
+                    timestamp: m.timestamp,
+                })),
+            );
+            setHistoryOpen(false);
+        } catch (error) {
+            setConversationsError('Could not restore that conversation. Try again.');
+            console.error('Failed to restore conversation', error);
+        }
+    };
 
     // One WebSocket per connectKey. Only the Reconnect button changes connectKey.
     useEffect(() => {
@@ -136,7 +194,6 @@ export default function AiView({axiosInstance, refreshData}) {
                     }
                 };
 
-                // onerror only records the state; onclose reports a lost reply once.
                 socket.onerror = () => {
                     if (!mounted) return;
                     setSocketStatus('error');
@@ -170,7 +227,6 @@ export default function AiView({axiosInstance, refreshData}) {
         endRef.current?.scrollIntoView({behavior: 'smooth'});
     }, [messages, loading]);
 
-    // Grow the text box with its content, up to a limit.
     useEffect(() => {
         const element = textareaRef.current;
         if (!element) return;
@@ -208,7 +264,11 @@ export default function AiView({axiosInstance, refreshData}) {
                 const result = await axiosRef.current.post('/dashboard/gemini/upload', form);
                 attachmentId = result.data.file_id;
             }
-            socket.send(JSON.stringify({prompt, attachment_id: attachmentId}));
+            socket.send(JSON.stringify({
+                prompt,
+                attachment_id: attachmentId,
+                conversation_id: activeConversationId || undefined
+            }));
         } catch (error) {
             setBusy(false);
             pushMessage('assistant', 'Could not send your message. Check your connection and try again.');
@@ -228,10 +288,13 @@ export default function AiView({axiosInstance, refreshData}) {
     };
 
     const clearHistory = async () => {
-        if (!window.confirm('Clear all chat history?')) return;
+        if (!window.confirm('Clear all chat history? This cannot be undone.')) return;
         try {
             await axiosRef.current.delete('/dashboard/gemini/history');
             setMessages([]);
+            setActiveConversationId(null);
+            setConversations([]);
+            setConversationsError(null);
         } catch (error) {
             console.error('Could not clear history', error);
             pushMessage('assistant', 'Could not clear the history. Try again.');
@@ -247,27 +310,83 @@ export default function AiView({axiosInstance, refreshData}) {
         <section className="nx-ai">
             <style>{css}</style>
 
-            <aside className="nx-side" aria-label="Chat history">
-                <div className="nx-side-head">
-                    <h2><Clock size={16}/> History</h2>
-                    <button type="button" className="nx-ghost" onClick={clearHistory} disabled={!messages.length}>
-                        <Trash2 size={14}/> Clear history
+            <main className="nx-main">
+                <div className="nx-head">
+                    <button
+                        type="button"
+                        className={`nx-history-toggle ${historyOpen ? 'nx-pressed' : ''}`}
+                        aria-label={historyOpen ? 'Hide conversation history' : 'Show conversation history'}
+                        aria-expanded={historyOpen}
+                        aria-controls="nx-history-panel"
+                        onClick={() => setHistoryOpen((prev) => !prev)}
+                    >
+                        <Clock size={16}/>
+                        <span className="nx-toggle-label">{historyOpen ? 'Hide History' : 'History'}</span>
                     </button>
                 </div>
-                {userMessages.length ? (
-                    <ul className="nx-history">
-                        {userMessages.map((message, index) => (
-                            <li key={message.id || `${message.timestamp}-${index}`} title={message.text}>
-                                {message.text}
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <p className="nx-muted">Your questions will appear here.</p>
-                )}
-            </aside>
 
-            <main className="nx-main">
+                <aside
+                    id="nx-history-panel"
+                    className={`nx-side ${historyOpen ? 'nx-side-open' : 'nx-side-closed'}`}
+                    aria-label="Conversation history"
+                    aria-hidden={!historyOpen}
+                >
+                    <div className="nx-side-head">
+                        <h2><Clock size={16}/> History</h2>
+                        <button type="button" className="nx-ghost" onClick={clearHistory} disabled={!messages.length}>
+                            <Trash2 size={14}/> Clear history
+                        </button>
+                    </div>
+                    {conversationsError && <p className="nx-muted">{conversationsError}</p>}
+                    {conversationsLoading ? (
+                        <p className="nx-muted">Loading history...</p>
+                    ) : conversations.length ? (
+                        <ul className="nx-history" role="list" aria-label="Saved conversations">
+                            {conversations.map((conv) => {
+                                const selected = activeConversationId === conv.id;
+                                return (
+                                    <li
+                                        key={conv.id}
+                                        className={`nx-history-item ${selected ? 'nx-selected' : ''}`}
+                                        onClick={() => selectConversation(conv)}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={`${conv.title || 'Untitled conversation'}. ${conv.preview || ''}. ${formatDate(conv.updated_at || conv.created_at)}`}
+                                        aria-pressed={selected}
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Enter' || event.key === ' ') {
+                                                event.preventDefault();
+                                                selectConversation(conv);
+                                            }
+                                        }}
+                                    >
+                                        <div className="nx-entry-main">
+                                            <div
+                                                className="nx-entry-title">{conv.title || 'Untitled conversation'}</div>
+                                            {conv.preview && <div className="nx-entry-preview">{conv.preview}</div>}
+                                            <div className="nx-entry-meta">
+                                                <span>{formatDate(conv.updated_at || conv.created_at)}</span>
+                                                {conv.message_count != null && (
+                                                    <span>
+                                                        {conv.message_count} message{conv.message_count === 1 ? '' : 's'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {selected && <span className="nx-selected-mark">&check;</span>}
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    ) : (
+                        <p className="nx-muted">No saved conversations yet.</p>
+                    )}
+                </aside>
+
+                {historyOpen && (
+                    <div className="nx-drawer-backdrop" onClick={() => setHistoryOpen(false)} aria-hidden="true"/>
+                )}
+
                 <div className="nx-status" role="status" aria-live="polite">
                     <span className={`nx-dot nx-dot-${socketStatus}`} aria-hidden="true"/>
                     {STATUS_LABEL[socketStatus] || socketStatus}
@@ -410,6 +529,7 @@ const css = `
   --nx-ink: #1f2937;
   --nx-muted: #6b7280;
   --nx-soft: #f3f4f6;
+  position: relative;
   display: flex;
   height: calc(100vh - 90px);
   min-height: 0;
@@ -422,20 +542,79 @@ const css = `
 .nx-ai :focus-visible { outline: 2px solid var(--nx-green); outline-offset: 2px; }
 .nx-muted { color: var(--nx-muted); font-size: 0.9rem; margin: 0; }
 
-/* Sidebar */
+/* Main header with the history toggle */
+.nx-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 24px; border-bottom: 1px solid var(--nx-line);
+}
+.nx-history-toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid var(--nx-line); border-radius: 10px;
+  padding: 6px 12px; background: #fff; color: var(--nx-ink);
+  font-size: 0.9rem; font-weight: 600; cursor: pointer;
+}
+.nx-history-toggle:hover { background: var(--nx-soft); border-color: var(--nx-muted); }
+.nx-history-toggle.nx-pressed {
+  background: var(--nx-tint); border-color: var(--nx-green);
+}
+.nx-history-toggle[aria-expanded="true"] { background: var(--nx-tint); border-color: var(--nx-green); }
+.nx-toggle-label { white-space: nowrap; }
+
+/* Sidebar / history panel */
 .nx-side {
-  width: 260px; flex-shrink: 0; padding: 20px 16px;
+  width: 0; flex-shrink: 0; overflow: hidden;
+  display: flex; flex-direction: column;
   border-right: 1px solid var(--nx-line);
-  display: flex; flex-direction: column; gap: 14px; overflow: hidden;
+  transition: width 0.25s ease, visibility 0.25s ease;
+  visibility: hidden;
 }
-.nx-side-head { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.nx-side-closed { width: 0; visibility: hidden; pointer-events: none; }
+.nx-side-open {
+  width: 320px; visibility: visible; pointer-events: auto;
+}
+.nx-side-head {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  padding: 20px 16px; flex-shrink: 0;
+}
 .nx-side h2 { margin: 0; font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-.nx-history { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.nx-history li {
-  padding: 8px 10px; border-radius: 8px; font-size: 0.9rem; color: var(--nx-ink);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.nx-history {
+  list-style: none; margin: 0; padding: 0;
+  overflow-y: auto; display: flex; flex-direction: column;
+  flex: 1; min-height: 0;
 }
-.nx-history li:hover { background: var(--nx-soft); }
+.nx-history-item {
+  display: flex; align-items: flex-start;
+  padding: 10px 14px; border-radius: 10px;
+  cursor: pointer; border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.nx-history-item:hover { background: var(--nx-soft); border-color: var(--nx-line); }
+.nx-history-item:focus-visible { outline: 2px solid var(--nx-green); outline-offset: 2px; background: var(--nx-soft); }
+.nx-history-item.nx-selected {
+  background: var(--nx-tint); border-color: var(--nx-green);
+}
+.nx-history-item.nx-selected .nx-entry-title { color: var(--nx-green-dark); font-weight: 700; }
+.nx-selected-mark {
+  margin-left: auto; margin-top: 2px; font-size: 0.75rem; color: var(--nx-green);
+  font-weight: 700; flex-shrink: 0;
+}
+.nx-entry-main { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 4px; }
+.nx-entry-title {
+  font-size: 0.92rem; font-weight: 600; color: var(--nx-ink);
+  overflow-wrap: anywhere; white-space: normal; line-height: 1.25;
+  min-width: 0;
+}
+.nx-entry-preview {
+  font-size: 0.8rem; color: var(--nx-muted);
+  overflow-wrap: anywhere; white-space: normal; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; min-width: 0;
+}
+.nx-entry-meta {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 0.75rem; color: var(--nx-muted); margin-top: 4px;
+  flex-wrap: wrap;
+}
 .nx-ghost {
   display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
   border: 1px solid var(--nx-line); border-radius: 8px; background: #fff;
@@ -445,10 +624,11 @@ const css = `
 .nx-ghost:disabled { opacity: 0.5; cursor: default; }
 
 /* Main column */
-.nx-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.nx-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .nx-status {
   display: flex; align-items: center; gap: 8px; padding: 12px 24px;
   font-size: 0.85rem; color: var(--nx-muted); border-bottom: 1px solid var(--nx-line);
+  flex-shrink: 0;
 }
 .nx-status .nx-ghost { margin-left: 6px; }
 .nx-dot { width: 8px; height: 8px; border-radius: 50%; background: #9ca3af; }
@@ -544,8 +724,28 @@ const css = `
 .nx-file button { border: none; background: transparent; cursor: pointer; display: inline-flex; padding: 2px; color: #4b5563; }
 .nx-hint { margin: 6px 0 0; font-size: 0.78rem; color: var(--nx-muted); text-align: center; }
 
+/* Drawer backdrop (mobile overlay) */
+.nx-drawer-backdrop {
+  display: none;
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35);
+  z-index: 30; backdrop-filter: blur(2px);
+}
+
 @media (max-width: 800px) {
-  .nx-side { display: none; }
+  .nx-drawer-backdrop { display: block; }
+  .nx-side {
+    position: absolute; inset: 0; width: auto; height: 100%;
+    background: #fff; z-index: 40; border-right: 1px solid var(--nx-line);
+    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.08);
+    transition: transform 0.25s ease, visibility 0.25s ease;
+  }
+  .nx-side.nx-side-closed {
+    transform: translateX(-100%); visibility: hidden; pointer-events: none;
+  }
+  .nx-side.nx-side-open {
+    transform: translateX(0); visibility: visible; pointer-events: auto;
+    width: auto;
+  }
   .nx-scroll { padding: 16px; }
   .nx-composer-wrap { padding: 8px 12px 12px; }
   .nx-status { padding: 10px 16px; }
