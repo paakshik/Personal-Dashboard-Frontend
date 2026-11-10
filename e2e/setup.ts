@@ -1,19 +1,15 @@
-import { test as base } from '@playwright/test';
+import {test as base} from '@playwright/test';
 
 export const test = base.extend({
-    context: async ({ context }, use) => {
-        // 🚀 INJECT BEFORE SCRIPT EXECUTION
-        // This stops the app from seeing 'null' and redirecting to /login
-        await context.addInitScript(() => {
-            window.localStorage.setItem('token', 'MOCK_GOOGLE_LEVEL_TOKEN');
-            window.localStorage.setItem('user', JSON.stringify({
+    page: async ({page}, use) => {
+        await page.addInitScript(() => {
+            localStorage.setItem('token', 'MOCK_TEST_TOKEN');
+            localStorage.setItem('user', JSON.stringify({
                 id: 'user_123',
-                email: 'engineer@google.com',
-                name: 'Senior Dev',
-                role: 'admin'
+                name: 'Test User',
+                email: 'tester@example.com'
             }));
         });
-
-        await use(context);
+        await use(page);
     },
 });

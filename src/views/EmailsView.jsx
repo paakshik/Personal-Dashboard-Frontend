@@ -1,10 +1,10 @@
-
-import { Mail, Star, Trash2, Tag, BookOpen, Calendar, X } from 'lucide-react'
-import { useState } from 'react'
+import {BookOpen, Calendar, Mail, Star, Tag, Trash2, X} from 'lucide-react'
+import {useState} from 'react'
 import axios from 'axios'
-import { TrophySpin } from 'react-loading-indicators'
+import {TrophySpin} from 'react-loading-indicators'
+import {API_BASE_URL} from '../api.jsx';
 // --- 🎨 NEW LIGHT THEME STYLES ---
-
+const API_URL = API_BASE_URL;
 const fullPageStyle = {
     padding: '10px 0',
     minHeight: '100vh',
@@ -20,7 +20,7 @@ const getAuthConfig = () => ({
 const markAsRead = async (messageId) => {
   try {
     await axios.post(
-      `http://127.0.0.1:8000/dashboard/email/${messageId}/read`,
+        `${API_URL}/dashboard/email/${messageId}/read`,
       {},
       {
         headers: {
@@ -383,7 +383,7 @@ const fetchEmailContent = async (messageId) => {
   setLoadingContent(true);
   try {
     const res = await axios.get(
-      `http://127.0.0.1:8000/dashboard/email/${messageId}`,
+        `${API_URL}/dashboard/email/${messageId}`,
       getAuthConfig()
     );
 

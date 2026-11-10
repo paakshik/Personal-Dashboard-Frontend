@@ -1,7 +1,22 @@
-import React, { useState } from 'react'
-import { Calendar, Plus, Trash2, X, Edit2, Video, FileText, Upload, Link as LinkIcon, Eye, ExternalLink, Paperclip } from 'lucide-react'
-import { TrophySpin } from "react-loading-indicators";
+import React, {useState} from 'react'
+import {
+    Calendar,
+    Edit2,
+    ExternalLink,
+    Eye,
+    FileText,
+    Link as LinkIcon,
+    Paperclip,
+    Plus,
+    Trash2,
+    Upload,
+    Video,
+    X
+} from 'lucide-react'
+import {TrophySpin} from "react-loading-indicators";
+import {API_BASE_URL} from '../api.jsx';
 
+const API_URL = API_BASE_URL;
 // --- 💎 COMPONENT: ATTACHMENT CARD (Unified UI) ---
 const AttachmentCard = ({ file, onRemove }) => (
     <div style={styles.fileCard}>
@@ -215,10 +230,10 @@ export default function ScheduleView({ events = [], refreshData, onFileUpload,is
         }
 
         try {
-            let url = 'http://127.0.0.1:8000/dashboard/calendar/events';
+            let url = API_URL + '/dashboard/calendar/events';
             let method = 'POST';
             if (editMode) {
-                url = `http://127.0.0.1:8000/dashboard/calendar/events/${currentEventId}`;
+                url = `${API_URL}/dashboard/calendar/events/${currentEventId}`;
                 method = 'PUT';
             }
             const token = localStorage.getItem('token');
@@ -245,7 +260,7 @@ export default function ScheduleView({ events = [], refreshData, onFileUpload,is
         if (!window.confirm("Are you sure?")) return;
         try {
             const token = localStorage.getItem('token');
-            await fetch(`http://127.0.0.1:8000/dashboard/calendar/events/${eventId}`, {
+            await fetch(`API_URL/dashboard/calendar/events/${eventId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`

@@ -1,31 +1,28 @@
 // ProjectsDashboard.jsx - Updated with real API integration
-import React, { useState, useEffect } from 'react';
+import React, {useEffect, useState} from 'react';
 import axios from 'axios';
-import { 
-  FaGithub, 
-  FaDatabase, 
-  FaExternalLinkAlt, 
-  FaServer, 
-  FaTrash,
-  FaPlus,
-  FaFolder,
-  FaChartLine,
-  FaCog,
-  FaHome,
-  FaTimes,
+import {
   FaCheckCircle,
-  FaEdit,
-  FaGlobe,
   FaCode,
+  FaDatabase,
+  FaEdit,
+  FaExternalLinkAlt,
+  FaFolder,
+  FaGithub,
+  FaGlobe,
   FaLaptopCode,
   FaMobileAlt,
-  FaRobot
+  FaPlus,
+  FaRobot,
+  FaServer,
+  FaTimes,
+  FaTrash
 } from 'react-icons/fa';
-import { BiEdit } from 'react-icons/bi';
-import { MdDashboard } from 'react-icons/md';
-import { TrophySpin } from 'react-loading-indicators';
+import {MdDashboard} from 'react-icons/md';
+import {TrophySpin} from 'react-loading-indicators';
+import {API_BASE_URL} from '../api.jsx';
 // API configuration
-const API_BASE_URL = 'http://localhost:8000';
+const API_URL = API_BASE_URL;
 
 const getAuthConfig = () => ({
   headers: {
@@ -53,13 +50,19 @@ const ProjectDashboard = () => {
   const fetchProjects = async () => {
     try {
       setIsLoading(true);
-    const response = await axios.get(
-  `${API_BASE_URL}/dashboard/projects`,
-  getAuthConfig()
-);
+        const response = await axios.get(
+            `${API_URL}/dashboard/projects`,
+            getAuthConfig()
+        );
 
-      setProjects(response.data.projects);
-      setStats(response.data.stats);
+        setProjects(response.data.projects || []);
+        setStats(response.data.stats || {
+            total: 0,
+            inProgress: 0,
+            completed: 0,
+            planning: 0,
+            avgProgress: 0
+        });
     } catch (error) {
       console.error('Error fetching projects:', error);
       setProjects([]);
@@ -81,7 +84,7 @@ const ProjectDashboard = () => {
   }, []);
 
   // Filter projects based on search and status
-  const filteredProjects = projects.filter(project => {
+    const filteredProjects = (projects || []).filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          project.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          project.technologies.some(tech => tech.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -280,7 +283,7 @@ const ProjectDashboard = () => {
         if (projectToEdit) {
           // Update existing project
 await axios.put(
-  `${API_BASE_URL}/dashboard/projects/${project.id}`,
+    `${API_URL}/dashboard/projects/${project.id}`,
   projectData,
   getAuthConfig()
 );
@@ -288,7 +291,7 @@ await axios.put(
         } else {
           // Create new project
 await axios.post(
-  `${API_BASE_URL}/dashboard/projects`,
+    `${API_URL}/dashboard/projects`,
   projectData,
   getAuthConfig()
 );
@@ -541,7 +544,7 @@ await axios.post(
     if (window.confirm('Are you sure you want to delete this project?')) {
       try {
 await axios.delete(
-  `${API_BASE_URL}/dashboard/projects/${id}`,
+    `${API_URL}/dashboard/projects/${id}`,
   getAuthConfig()
 );
 
@@ -578,19 +581,19 @@ await axios.delete(
       <div style={styles.statsOverview}>
         <div style={styles.statCard}>
           <h3 style={styles.statTitle}>Total Projects</h3>
-          <div style={styles.statNumber}>{stats.total}</div>
+            <div style={styles.statNumber}>{stats?.total || 0}</div>
         </div>
         <div style={styles.statCard}>
           <h3 style={styles.statTitle}>In Progress</h3>
-          <div style={styles.statNumber}>{stats.inProgress}</div>
+            <div style={styles.statNumber}>{stats?.inProgress || 0}</div>
         </div>
         <div style={styles.statCard}>
           <h3 style={styles.statTitle}>Completed</h3>
-          <div style={styles.statNumber}>{stats.completed}</div>
+            <div style={styles.statNumber}>{stats?.completed || 0}</div>
         </div>
         <div style={styles.statCard}>
           <h3 style={styles.statTitle}>Avg. Progress</h3>
-          <div style={styles.statNumber}>{stats.avgProgress}%</div>
+            <div style={styles.statNumber}>{stats?.avgProgress || 0}%</div>
         </div>
       </div>
 

@@ -1,7 +1,5 @@
-import { defineConfig } from '@playwright/test';
-
-// If you have a global setup file, import its path
-import { fileURLToPath } from 'url';
+import process from "node:process";
+import {defineConfig} from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
@@ -9,17 +7,12 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
-  use: {
-    baseURL: 'http://localhost:5173',
-    trace: 'on-first-retry',
-    storageState: 'playwright/.auth/user.json',
-  },
-  // Use `fileURLToPath` for ES module compatibility
-  globalSetup: fileURLToPath(new URL('./global-setup.js', import.meta.url)),
+    reporter: 'list',
+    use: {baseURL: 'http://localhost:5173', trace: 'on-first-retry'},
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
   },
 });
+

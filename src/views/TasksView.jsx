@@ -1,7 +1,25 @@
-import { CheckSquare, List, Plus, Trash2, CheckCircle, ChevronDown, ChevronUp, Edit2, Upload, FileText, ExternalLink, Paperclip, X , Search} from 'lucide-react'
-import { useState, useEffect } from 'react'
+import {
+    CheckCircle,
+    CheckSquare,
+    ChevronDown,
+    ChevronUp,
+    Edit2,
+    ExternalLink,
+    FileText,
+    List,
+    Paperclip,
+    Plus,
+    Search,
+    Trash2,
+    Upload,
+    X
+} from 'lucide-react'
+import {useEffect, useState} from 'react'
 import axios from 'axios'
-import { TrophySpin } from 'react-loading-indicators';
+import {TrophySpin} from 'react-loading-indicators';
+import {API_BASE_URL} from '../api.jsx';
+
+const API_URL = API_BASE_URL;
 // --- 💎 COMPONENT: COMPACT ATTACHMENT CARD ---
 const AttachmentCard = ({ file, onRemove }) => (
     <div style={styles.fileCard}>
@@ -56,7 +74,7 @@ const segregateAndSortTasks = (tasks, groupByLabel) => {
     return groupedByLabel;
 };
 
-export default function TasksView({ tasks = [], refreshData, onFileUpload ,isLoading})  { 
+export default function TasksView({tasks = [], refreshData: _refreshData, onFileUpload, isLoading}) {
     // State
     const [localTasks, setLocalTasks] = useState(tasks)
     const [loading, setLoading] = useState(false)
@@ -89,12 +107,12 @@ export default function TasksView({ tasks = [], refreshData, onFileUpload ,isLoa
 
     const refreshTasks = async () => {
     try {
-
-        const res = await axios.get('http://127.0.0.1:8000/dashboard/todoist')
-        setLocalTasks(res.data)
-    } catch(e) { 
-        console.error(e) 
-    } 
+        const res = await axios.get(`${API_URL}/dashboard/todoist`);
+        setLocalTasks(res.data);
+        if (_refreshData) await _refreshData();
+    } catch (error) {
+        console.error("Task refresh failed", error);
+    }
 }
 
     const toggleGroup = (groupName) => {
@@ -128,17 +146,21 @@ export default function TasksView({ tasks = [], refreshData, onFileUpload ,isLoa
     // --- ACTIONS ---
     const handleComplete = async (id) => {
         try {
-            await axios.post(`http://127.0.0.1:8000/dashboard/todoist/tasks/${id}/complete`)
+            await axios.post(`${API_URL}/dashboard/todoist/tasks/${id}/complete`)
             refreshTasks()
-        } catch(e) { alert("Error completing task") }
+        } catch {
+            alert("Error completing task")
+        }
     }
 
     const handleDelete = async (id) => {
         if(!confirm("Delete this task?")) return;
         try {
-            await axios.delete(`http://127.0.0.1:8000/dashboard/todoist/tasks/${id}`)
+            await axios.delete(`${API_URL}/dashboard/todoist/tasks/${id}`)
             refreshTasks()
-        } catch(e) { alert("Error deleting task") }
+        } catch {
+            alert("Error deleting task")
+        }
     }
 
     // --- MODALS ---
@@ -152,7 +174,7 @@ export default function TasksView({ tasks = [], refreshData, onFileUpload ,isLoa
     e.stopPropagation()
     setEditMode(true)
     setCurrentTaskId(task.id)
-    
+
     // 🧠 Smart Parse: Separate text and files
     const { cleanDesc, attachments } = parseTaskDetails(task.description || '');
 
@@ -162,9 +184,9 @@ export default function TasksView({ tasks = [], refreshData, onFileUpload ,isLoa
         labels: task.labels || [],
         attachments: attachments
     })
-    
+
     // 🔄 Close view modal when opening edit
-    setViewTask(null) 
+        setViewTask(null)
     setIsModalOpen(true)
 }
 
@@ -186,10 +208,10 @@ const handleFileUpload = async (e) => {
     try {
         // Use the axios instance passed from App.jsx
         const res = await onFileUpload(file);
-        
+
         // ✅ ADD: Log what we're sending
         console.log('Upload response:', res);
-        
+
         if (res && res.filename && res.link) {
             const newFile = { name: res.filename, url: res.link };
             setFormData(prev => ({ ...prev, attachments: [...prev.attachments, newFile] }));
@@ -201,7 +223,7 @@ const handleFileUpload = async (e) => {
     } catch (err) {
         console.error('Upload error:', err);
         let errorMessage = "Upload failed: ";
-        
+
         if (err.response) {
             errorMessage += `${err.response.status}: ${err.response.data?.detail || err.response.data?.message || 'Server error'}`;
         } else if (err.request) {
@@ -209,7 +231,7 @@ const handleFileUpload = async (e) => {
         } else {
             errorMessage += err.message;
         }
-        
+
         alert(errorMessage);
     } finally {
         setIsUploading(false);
@@ -237,10 +259,10 @@ const handleSubmit = async (e) => {
             finalDescription = finalDescription ? `${finalDescription}\n\n${attachmentString}` : attachmentString;
         }
 
-        const payload = { 
+        const payload = {
             content: formData.content,
             description: finalDescription,
-            labels: formData.labels 
+            labels: formData.labels
         }
 
         if (editMode) {
@@ -253,22 +275,22 @@ const handleSubmit = async (e) => {
                 due: localTasks.find(t => t.id === currentTaskId)?.due,
                 project_id: localTasks.find(t => t.id === currentTaskId)?.project_id
             };
-            
+
             // Update local state instantly
-            setLocalTasks(prev => prev.map(task => 
+            setLocalTasks(prev => prev.map(task =>
                 task.id === currentTaskId ? { ...task, ...updatedTask } : task
             ));
-            
+
             // Send to server
-            await axios.post(`http://127.0.0.1:8000/dashboard/todoist/tasks/${currentTaskId}`, payload)
+            await axios.post(`${API_URL}/dashboard/todoist/tasks/${currentTaskId}`, payload)
         } else {
-            await axios.post(`http://127.0.0.1:8000/dashboard/todoist/tasks`, payload)
+            await axios.post(`${API_URL}/dashboard/todoist/tasks`, payload)
             // For new tasks, refresh from server
             await refreshTasks();
         }
         
         setIsModalOpen(false)
-    } catch(e) {
+    } catch {
         alert("Error saving task")
     } finally {
         setLoading(false)

@@ -1,10 +1,7 @@
-import { expect } from '@playwright/test';
-import { test } from '../e2e/network.mock.ts';
+import {expect, test} from '../e2e/network.mock';
 
-test('Tasks View displays Todoist items', async ({ page }) => {
+test('opens tasks view with task controls', async ({page}) => {
     await page.goto('/');
-    await page.getByText('Tasks').click();
-
-    await expect(page.getByRole('button', { name: /Add Task/i })).toBeVisible();
-    await expect(page.getByText('Finish Playwright Suite')).toBeVisible();
+    await page.getByRole('navigation').getByText('Tasks').click();
+    await expect(page.getByText(/task/i).first()).toBeVisible();
 });

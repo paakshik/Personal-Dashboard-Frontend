@@ -1,7 +1,6 @@
-import { test, expect } from '@playwright/test';
+import {expect, test} from '@playwright/test';
 
-test('App loads and shows dashboard', async ({ page }) => {
+test('redirects unauthenticated visitor to the sign-in screen', async ({page}) => {
     await page.goto('/');
-
-    await expect(page.locator('text=Dashboard')).toBeVisible();
+    await expect(page.getByText(/sign in|login with google/i).first()).toBeVisible();
 });

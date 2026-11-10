@@ -1,30 +1,27 @@
-
-import React, { useState, useEffect } from 'react';
-import { 
-  Copy, 
-  Search, 
-  Plus, 
-  Check, 
-  Terminal, 
-  X, 
-  FileText, 
-  Code, 
-  Database, 
-  Globe, 
-  Lock, 
-  Cloud, 
-  Wifi,
-  Server,
-  Trash2,
-  Edit,
-  Loader,
-  RefreshCw,
+import React, {useCallback, useEffect, useState} from 'react';
+import {
   AlertCircle,
-  CheckCircle
+  Check,
+  CheckCircle,
+  Cloud,
+  Code,
+  Copy,
+  Database,
+  Edit,
+  FileText,
+  Loader,
+  Lock,
+  Plus,
+  RefreshCw,
+  Search,
+  Server,
+  Terminal,
+  Trash2,
+  Wifi,
+  X
 } from 'lucide-react';
-import axios from 'axios';
-import { TrophySpin } from 'react-loading-indicators';  
-const API_BASE_URL = 'http://localhost:8000'; 
+import api from '../api.jsx';
+import {TrophySpin} from 'react-loading-indicators';
 
 
 const CommandNexus = () => {
@@ -78,13 +75,10 @@ const CommandNexus = () => {
   };
 
   // Fetch commands from backend
-  const fetchCommands = async () => {
+    const fetchCommands = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await axios.get(
-        `${API_BASE_URL}/dashboard/commands`,
-        getAuthHeaders()
-      );
+        const response = await api.get("/dashboard/commands");
       setCommands(response.data);
     } catch (error) {
       console.error("Failed to fetch commands:", error.response?.data || error.message);
@@ -92,7 +86,7 @@ const CommandNexus = () => {
     } finally {
       setLoading(false);
     }
-  };
+    }, []);
 
   // Initialize
   useEffect(() => {
@@ -101,7 +95,7 @@ const CommandNexus = () => {
     fetchCommands();
     
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchCommands]);
 
   // Auto-focus form when opened
   useEffect(() => {
@@ -149,24 +143,15 @@ const CommandNexus = () => {
 
     try {
       setSaving(true);
-      const headers = getAuthHeaders();
+        getAuthHeaders();
       
-      let response;
       if (isEditing && formData.id) {
         // Update existing command
-        response = await axios.put(
-          `${API_BASE_URL}/dashboard/commands/${formData.id}`,
-          formData,
-          headers
-        );
+          await api.put(`/dashboard/commands/${formData.id}`, formData);
         showNotification('Command updated successfully!', 'success');
       } else {
         // Create new command
-        response = await axios.post(
-          `${API_BASE_URL}/dashboard/commands`,
-          formData,
-          headers
-        );
+          await api.post("/dashboard/commands", formData);
         showNotification('Command created successfully!', 'success');
       }
       
@@ -208,10 +193,7 @@ const CommandNexus = () => {
     }
     
     try {
-      await axios.delete(
-        `${API_BASE_URL}/dashboard/commands/${commandId}`,
-        getAuthHeaders()
-      );
+        await api.delete(`/dashboard/commands/${commandId}`);
       
       // Update local state
       setCommands(prev => prev.filter(c => c.id !== commandId));
