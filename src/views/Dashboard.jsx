@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import {TrophySpin} from "react-loading-indicators";
 import ReactDOM from 'react-dom';
-import {API_BASE_URL} from '../api.jsx';
+import {API_BASE_URL, getWebSocketTicketUrl} from '../api.jsx';
 
 const API_URL = API_BASE_URL;
 const safeJson = async (response) => {
@@ -662,50 +662,59 @@ export default function OperatorConsole() {
   }, []);
 
 useEffect(() => {
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-        console.error('❌ No token found');
-        return;
-    }
-    
-    try {
-        const apiUrl = API_URL;
-        const cleanUrl = apiUrl.replace(/^https?:\/\//, ''); // Remove http:// or https://
-        const wsProtocol = (apiUrl.includes('render.com') || apiUrl.includes('https')) ? 'wss://' : 'ws://';
+    let mounted = true;
 
-        const socket = new WebSocket(`${wsProtocol}${cleanUrl}/dashboard/system/vitals/stream?token=${encodeURIComponent(token)}`);
+    (async () => {
+        const token = localStorage.getItem('token');
 
-        socket.onopen = () => {
-            console.log('✅ WebSocket connected');
-            // ✅ ALSO send as JSON for backup auth
-            socket.send(JSON.stringify({ token: token }));
-        };
+        if (!token) {
+            console.error('❌ No token found');
+            return;
+        }
 
-        socket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.type === 'ping') return;
-            setVitals(data);
-        };
-        
-        socket.onerror = (error) => {
-            console.error('❌ WebSocket error:', error);
-        };
-        
-        socket.onclose = (event) => {
-            console.log(`🔌 Closed: ${event.code}`);
-        };
-        
-        wsRef.current = socket;
-        
-        return () => {
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.close();
-            }
-        };
-    } catch (error) {
-        console.error('❌ Failed to create WebSocket:', error);
-    }
+        try {
+            const wsUrl = await getWebSocketTicketUrl('/dashboard/system/vitals/stream');
+            const socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => {
+                if (!mounted) return;
+                console.log('✅ WebSocket connected (ticket-authenticated)');
+            };
+
+            socket.onmessage = (event) => {
+                if (!mounted) return;
+                const data = JSON.parse(event.data);
+                if (data.type === 'ping') return;
+                setVitals(data);
+            };
+
+            socket.onerror = (error) => {
+                if (!mounted) return;
+                console.error('❌ WebSocket error:', error);
+            };
+
+            socket.onclose = (event) => {
+                if (!mounted) return;
+                console.log(`🔌 Closed: ${event.code}`);
+            };
+
+            wsRef.current = socket;
+
+            return () => {
+                mounted = false;
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.close();
+                }
+            };
+        } catch (error) {
+            if (!mounted) return;
+            console.error('❌ Failed to create WebSocket:', error);
+        }
+    })();
+
+    return () => {
+        mounted = false;
+    };
 }, [setVitals]);
 
   // Initial load of non-real-time data

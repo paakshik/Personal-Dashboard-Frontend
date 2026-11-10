@@ -3,6 +3,7 @@ import './App.css';
 import api from './api.jsx';
 import Navbar from './components/Navbar.jsx';
 import DashboardView from './views/Dashboard.jsx';
+import HomeView from './views/HomeView.jsx';
 import ProjectsDashboard from './views/ProjectDashboard.jsx';
 import CommandNexus from './views/commandnexus.jsx';
 import ScheduleView from './views/ScheduleView.jsx';
@@ -14,7 +15,7 @@ import {TrophySpin} from 'react-loading-indicators';
 
 function App() {
   const [user, setUser] = useState(null);
-    const [activeView, setActiveView] = useState('dashboard');
+    const [activeView, setActiveView] = useState('home');
     const [events, setEvents] = useState([]);
     const [tasks, setTasks] = useState([]);
     const [emails, setEmails] = useState([]);
@@ -81,7 +82,7 @@ function App() {
         }
         setUser(null);
         setIsAuthenticated(false);
-        setActiveView('dashboard');
+        setActiveView('home');
         ['token', 'user'].forEach((key) => localStorage.removeItem(key));
         setEvents([]);
         setTasks([]);
@@ -143,6 +144,8 @@ function App() {
     if (!isAuthenticated) return <LoginScreen handleGoogleLogin={handleGoogleLogin}/>;
 
     const views = {
+        home: <HomeView events={events} tasks={tasks} emails={emails} projects={projects.projects || []}
+                        setActiveView={setActiveView} refreshData={refreshData} systemVitals={systemVitals}/>,
         calendar: <ScheduleView events={events} isLoading={loading} refreshData={() => refreshViewData('calendar')}
                                 onFileUpload={handleFileUpload}/>,
         tasks: <TasksView tasks={tasks} isLoading={loading} refreshData={() => refreshViewData('tasks')}
