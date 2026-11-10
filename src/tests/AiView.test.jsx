@@ -2,6 +2,12 @@ import {beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import AiView from '../views/aiview.jsx';
 
+vi.mock('../api', () => ({
+    default: {get: vi.fn(), post: vi.fn(), delete: vi.fn()},
+    getWebSocketTicketUrl: async () => 'ws://localhost:8000/dashboard/gemini/stream?ticket=test-ticket-123',
+    API_BASE_URL: 'http://localhost:8000',
+}));
+
 class MockWebSocket {
   static OPEN = 1;
   constructor(url) { this.url = url; this.readyState = MockWebSocket.OPEN; MockWebSocket.instance = this; }
@@ -16,16 +22,19 @@ beforeEach(() => {
 });
 
 describe('AI chat view', () => {
-  it('loads chat history and connects using the authenticated dashboard websocket URL', async () => {
+    it('loads chat history and connects using a ticket-based websocket URL (no bearer token)', async () => {
     const axiosInstance = { get: vi.fn().mockResolvedValue({ data: [{ id: 'm1', role: 'user', text: 'Saved question', timestamp: new Date().toISOString() }] }), post: vi.fn(), delete: vi.fn() };
     const { container } = render(<AiView axiosInstance={axiosInstance} />);
-    expect(await within(container.querySelector('main')).findByText('Saved question')).toBeTruthy();
-    expect(MockWebSocket.instance.url).toContain('/dashboard/gemini/stream?token=test-jwt');
+        await waitFor(() => expect(MockWebSocket.instance).toBeDefined());
+        expect(await within(container.querySelector('.nx-main')).findByText('Saved question')).toBeTruthy();
+        expect(MockWebSocket.instance.url).toContain('/dashboard/gemini/stream?ticket=test-ticket-123');
+        expect(MockWebSocket.instance.url).not.toContain('token=');
   });
 
   it('sends entered text through websocket and renders streamed chunks', async () => {
     const axiosInstance = { get: vi.fn().mockResolvedValue({ data: [] }), post: vi.fn(), delete: vi.fn() };
     render(<AiView axiosInstance={axiosInstance} />);
+      await waitFor(() => expect(MockWebSocket.instance).toBeDefined());
     MockWebSocket.instance.onopen();
       fireEvent.change(screen.getByRole('textbox', {name: 'Message Nexus AI'}), {target: {value: 'Hello AI'}});
       fireEvent.click(screen.getByRole('button', {name: 'Send message'}));
@@ -39,6 +48,7 @@ describe('AI chat view', () => {
     it('shows an approval card and sends the chosen approval to the backend', async () => {
         const axiosInstance = {get: vi.fn().mockResolvedValue({data: []}), post: vi.fn(), delete: vi.fn()};
         render(<AiView axiosInstance={axiosInstance}/>);
+        await waitFor(() => expect(MockWebSocket.instance).toBeDefined());
         MockWebSocket.instance.onmessage({
             data: JSON.stringify({
                 type: 'confirm',
@@ -59,6 +69,7 @@ describe('AI chat view', () => {
   it('shows a useful message when the backend reports a Gemini error', async () => {
     const axiosInstance = { get: vi.fn().mockResolvedValue({ data: [] }), post: vi.fn(), delete: vi.fn() };
     render(<AiView axiosInstance={axiosInstance} />);
+      await waitFor(() => expect(MockWebSocket.instance).toBeDefined());
       MockWebSocket.instance.onopen();
     MockWebSocket.instance.onmessage({ data: JSON.stringify({ type: 'error', message: 'Gemini API quota or rate limit reached.' }) });
     expect(await screen.findByText('Gemini API quota or rate limit reached.')).toBeTruthy();

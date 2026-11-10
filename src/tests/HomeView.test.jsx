@@ -1,6 +1,14 @@
-import {afterEach, beforeEach, describe, expect, it} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {render, screen, waitFor} from '@testing-library/react';
 import HomeView from '../views/HomeView.jsx';
+
+const mockFetch = vi.hoisted(() => vi.fn());
+global.fetch = mockFetch;
+
+vi.mock('../api.jsx', () => ({
+    getWebSocketTicketUrl: vi.fn().mockResolvedValue('ws://localhost:8000/dashboard/gemini/stream?ticket=test-ticket-123'),
+    API_BASE_URL: 'http://localhost:8000',
+}));
 
 class MockWebSocket {
     static OPEN = 1;

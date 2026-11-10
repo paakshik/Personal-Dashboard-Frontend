@@ -2,7 +2,7 @@ import {useCallback, useEffect, useState} from 'react';
 import './App.css';
 import api from './api.jsx';
 import Navbar from './components/Navbar.jsx';
-import DashboardView from './views/Dashboard.jsx';
+import OperatorConsole from './views/Dashboard.jsx';
 import HomeView from './views/HomeView.jsx';
 import ProjectsDashboard from './views/ProjectDashboard.jsx';
 import CommandNexus from './views/commandnexus.jsx';
@@ -156,6 +156,7 @@ function App() {
         commands: <CommandNexus commands={commands} isLoading={loading}
                                 refreshData={() => refreshViewData('commands')}/>,
         AI: <AiView axiosInstance={api} setActiveView={setActiveView} refreshData={refreshData}/>,
+        'server-information': <OperatorConsole/>,
     };
     return <div style={{minHeight: '100vh', color: 'var(--text-main)', backgroundColor: 'var(--bg-main)'}}>
         <Navbar activeView={activeView} setActiveView={setActiveView} refreshData={refreshData} loading={loading}
@@ -167,9 +168,7 @@ function App() {
             padding: 35,
             minHeight: '100vh'
         }}>
-            {views[activeView] ||
-                <DashboardView events={events} tasks={tasks} emails={emails} setActiveView={setActiveView}
-                               refreshData={refreshData} systemVitals={systemVitals}/>}
+            {views[activeView] || views.home}
         </main>
     </div>;
 }

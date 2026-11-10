@@ -2,15 +2,18 @@ import {beforeEach, describe, expect, it, vi} from 'vitest';
 import {render, screen, waitFor} from '@testing-library/react';
 import Navbar from '../components/Navbar';
 
-const mockGet = vi.hoisted(() => vi.fn());
+const mockFetch = vi.hoisted(() => vi.fn());
+global.fetch = mockFetch;
+
 vi.mock('../api.jsx', () => ({
-    default: {get: mockGet, post: vi.fn()},
+    default: {get: vi.fn(), post: vi.fn()},
     getWebSocketUrl: vi.fn(),
+    API_BASE_URL: 'http://localhost:8000',
 }));
 
 beforeEach(() => {
     localStorage.clear();
-    mockGet.mockReset();
+    mockFetch.mockReset();
 });
 
 function renderNavbar(props = {}) {
@@ -33,18 +36,16 @@ describe('Navbar', () => {
     });
 
     it('hides "Server Information" when not the owner', async () => {
-        mockGet.mockResolvedValue({data: {is_owner: false}});
+        mockFetch.mockResolvedValue({ok: true, json: async () => ({is_owner: false})});
         renderNavbar();
-        // Navbar currently does not fetch /dashboard/owner-access (Frontend dependency),
-        // so Server Information is not rendered either way. This test guards the
-        // not-owner rendering once the owner-gated item is implemented.
+        await waitFor(() => expect(mockFetch).toHaveBeenCalled());
         expect(screen.queryByText('Server Information')).not.toBeInTheDocument();
     });
 
     it('shows "Server Information" when the owner', async () => {
-        mockGet.mockResolvedValue({data: {is_owner: true}});
+        mockFetch.mockResolvedValue({ok: true, json: async () => ({is_owner: true})});
         renderNavbar();
-        await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/dashboard/owner-access'));
+        await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('http://localhost:8000/dashboard/owner-access', expect.anything()));
         expect(screen.getByText('Server Information')).toBeInTheDocument();
     });
 });

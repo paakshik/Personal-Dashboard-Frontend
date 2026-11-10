@@ -2,7 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {ArrowUp, Check, Clock, Paperclip, RefreshCw, Sparkles, Trash2, X} from 'lucide-react';
-import {getWebSocketUrl} from '../api';
+import {getWebSocketTicketUrl} from '../api';
 
 const SUGGESTIONS = [
     'What is on my calendar this week?',
@@ -64,79 +64,105 @@ export default function AiView({axiosInstance, refreshData}) {
 
     // One WebSocket per connectKey. Only the Reconnect button changes connectKey.
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) return undefined;
+        let mounted = true;
 
-        const socket = new WebSocket(getWebSocketUrl('/dashboard/gemini/stream', token));
-        ws.current = socket;
-
-        socket.onopen = () => setSocketStatus('connected');
-
-        socket.onmessage = ({data}) => {
-            let event;
-            try {
-                event = JSON.parse(data);
-            } catch {
+        (async () => {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                setSocketStatus('error');
                 return;
             }
-            if (event.type === 'start') {
-                setMessages((previous) => [
-                    ...previous,
-                    {role: 'assistant', text: '', timestamp: new Date().toISOString(), streaming: true},
-                ]);
-            } else if (event.type === 'chunk') {
-                setMessages((previous) => {
-                    const next = [...previous];
-                    const last = next[next.length - 1];
-                    if (last?.role === 'assistant' && last.streaming) {
-                        next[next.length - 1] = {...last, text: last.text + event.text};
-                    } else {
-                        next.push({
-                            role: 'assistant',
-                            text: event.text,
-                            timestamp: new Date().toISOString(),
-                            streaming: true,
-                        });
+
+            try {
+                const wsUrl = await getWebSocketTicketUrl(
+                    '/dashboard/gemini/stream',
+                    '/dashboard/gemini/ws-ticket'
+                );
+                if (!mounted) return;
+
+                const socket = new WebSocket(wsUrl);
+                ws.current = socket;
+
+                socket.onopen = () => {
+                    if (!mounted) return;
+                    setSocketStatus('connected');
+                };
+
+                socket.onmessage = ({data}) => {
+                    let event;
+                    try {
+                        event = JSON.parse(data);
+                    } catch {
+                        return;
                     }
-                    return next;
-                });
-            } else if (event.type === 'confirm') {
-                setPendingApprovals((pending) => [...pending, event]);
-            } else if (event.type === 'data_changed') {
-                if (typeof refreshData === 'function') void refreshData();
-            } else if (event.type === 'done') {
-                setBusy(false);
-                setMessages((previous) => previous.map((message) => ({...message, streaming: false})));
-            } else if (event.type === 'error') {
-                setBusy(false);
-                setMessages((previous) => [
-                    ...previous.map((message) => ({...message, streaming: false})),
-                    {
-                        role: 'assistant',
-                        text: event.message || 'The AI response failed. Try again.',
-                        timestamp: new Date().toISOString(),
-                    },
-                ]);
-            }
-        };
+                    if (event.type === 'start') {
+                        setMessages((previous) => [
+                            ...previous,
+                            {role: 'assistant', text: '', timestamp: new Date().toISOString(), streaming: true},
+                        ]);
+                    } else if (event.type === 'chunk') {
+                        setMessages((previous) => {
+                            const next = [...previous];
+                            const last = next[next.length - 1];
+                            if (last?.role === 'assistant' && last.streaming) {
+                                next[next.length - 1] = {...last, text: last.text + event.text};
+                            } else {
+                                next.push({
+                                    role: 'assistant',
+                                    text: event.text,
+                                    timestamp: new Date().toISOString(),
+                                    streaming: true,
+                                });
+                            }
+                            return next;
+                        });
+                    } else if (event.type === 'confirm') {
+                        setPendingApprovals((pending) => [...pending, event]);
+                    } else if (event.type === 'data_changed') {
+                        if (typeof refreshData === 'function') void refreshData();
+                    } else if (event.type === 'done') {
+                        setBusy(false);
+                        setMessages((previous) => previous.map((message) => ({...message, streaming: false})));
+                    } else if (event.type === 'error') {
+                        setBusy(false);
+                        setMessages((previous) => [
+                            ...previous.map((message) => ({...message, streaming: false})),
+                            {
+                                role: 'assistant',
+                                text: event.message || 'The AI response failed. Try again.',
+                                timestamp: new Date().toISOString(),
+                            },
+                        ]);
+                    }
+                };
 
-        // onerror only records the state; onclose reports a lost reply once.
-        socket.onerror = () => setSocketStatus('error');
+                // onerror only records the state; onclose reports a lost reply once.
+                socket.onerror = () => {
+                    if (!mounted) return;
+                    setSocketStatus('error');
+                };
 
-        socket.onclose = () => {
-            if (ws.current === socket) ws.current = null;
-            setSocketStatus((current) => (current === 'error' ? 'error' : 'disconnected'));
-            if (loadingRef.current) {
-                setBusy(false);
-                pushMessage('assistant', 'The connection closed before a reply arrived. Select Reconnect, then send your message again.');
+                socket.onclose = () => {
+                    if (!mounted) return;
+                    if (ws.current === socket) ws.current = null;
+                    setSocketStatus((current) => (current === 'error' ? 'error' : 'disconnected'));
+                    if (loadingRef.current) {
+                        setBusy(false);
+                        pushMessage('assistant', 'The connection closed before a reply arrived. Select Reconnect, then send your message again.');
+                    }
+                };
+            } catch (error) {
+                if (!mounted) return;
+                console.error('Failed to create WebSocket:', error);
+                setSocketStatus('error');
             }
-        };
+        })();
 
         return () => {
-            socket.onclose = null;
-            socket.onerror = null;
-            socket.close();
-            if (ws.current === socket) ws.current = null;
+            mounted = false;
+            if (ws.current?.readyState === WebSocket.OPEN) {
+                ws.current.close();
+            }
         };
     }, [connectKey, setBusy, pushMessage, refreshData]);
 

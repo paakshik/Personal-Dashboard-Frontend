@@ -126,7 +126,6 @@ export default function Navbar({activeView, setActiveView, refreshData, loading,
 
     const navItems = [
         {id: 'home', label: 'Home', icon: Home},
-        { id: 'dashboard', label: 'Dashboard', icon: Home },
         { id: 'calendar', label: 'Calendar', icon: Calendar },
         { id: 'tasks', label: 'Tasks', icon: CheckSquare },
         { id: 'emails', label: 'Emails', icon: Mail },

@@ -32,15 +32,19 @@ export function getWebSocketUrl(path, token, baseUrl = API_BASE_URL) {
 }
 
 /**
- * Build a WebSocket URL for the system vitals stream using a short-lived,
+ * Build a WebSocket URL for a user-gated stream using a short-lived,
  * single-use ticket instead of a long-lived bearer token in the URL.
  *
- * Fetches a ticket from POST /dashboard/system/ws-ticket (owner-gated),
- * then returns the WSS/WS URL with the ticket as a query parameter.
+ * Fetches a ticket from POST <ticketEndpoint> (user-gated), then returns
+ * the WSS/WS URL with the ticket as a query parameter.
+ *
+ * @param path        WebSocket path (e.g. '/dashboard/gemini/stream')
+ * @param ticketEndpoint  ticket-issuing endpoint path (e.g. '/dashboard/gemini/ws-ticket')
+ * @param baseUrl     API base URL
  */
-export async function getWebSocketTicketUrl(path, baseUrl = API_BASE_URL) {
+export async function getWebSocketTicketUrl(path, ticketEndpoint = '/dashboard/system/ws-ticket', baseUrl = API_BASE_URL) {
     const token = localStorage.getItem('token');
-    const res = await fetch(`${API_BASE_URL}/dashboard/system/ws-ticket`, {
+    const res = await fetch(`${baseUrl}${ticketEndpoint}`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`,

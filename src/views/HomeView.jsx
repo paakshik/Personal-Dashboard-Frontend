@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {getWebSocketUrl} from '../api.jsx';
+import {getWebSocketTicketUrl} from '../api.jsx';
 import {Calendar, CheckCircle, Folder, Mail, Plus, RefreshCw, Sparkles,} from 'lucide-react';
 import {TrophySpin} from 'react-loading-indicators';
 
@@ -148,7 +148,7 @@ export default function HomeView({
     const [briefingError, setBriefingError] = useState(null);
     const wsRef = useRef(null);
 
-    const generateBriefing = () => {
+    const generateBriefing = async () => {
         const token = localStorage.getItem('token');
         if (!token) {
             setBriefingError('Not authenticated');
@@ -168,7 +168,11 @@ export default function HomeView({
         const prompt = `Write a short, friendly daily briefing (2-4 sentences) based on my day: ${daySummary}. Include a gentle prioritization suggestion. Keep it encouraging and concise.`;
 
         try {
-            const socket = new WebSocket(getWebSocketUrl('/dashboard/gemini/stream', token));
+            const wsUrl = await getWebSocketTicketUrl(
+                '/dashboard/gemini/stream',
+                '/dashboard/gemini/ws-ticket'
+            );
+            const socket = new WebSocket(wsUrl);
             wsRef.current = socket;
 
             let assistantText = '';
