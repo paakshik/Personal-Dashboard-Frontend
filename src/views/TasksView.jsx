@@ -15,11 +15,8 @@ import {
     X
 } from 'lucide-react'
 import {useEffect, useState} from 'react'
-import axios from 'axios'
 import {TrophySpin} from 'react-loading-indicators';
-import {API_BASE_URL} from '../api.jsx';
-
-const API_URL = API_BASE_URL;
+import api from '../api.jsx';
 // --- 💎 COMPONENT: COMPACT ATTACHMENT CARD ---
 const AttachmentCard = ({ file, onRemove }) => (
     <div style={styles.fileCard}>
@@ -107,7 +104,7 @@ export default function TasksView({tasks = [], refreshData: _refreshData, onFile
 
     const refreshTasks = async () => {
     try {
-        const res = await axios.get(`${API_URL}/dashboard/todoist`);
+        const res = await api.get('/dashboard/todoist');
         setLocalTasks(res.data);
         if (_refreshData) await _refreshData();
     } catch (error) {
@@ -146,7 +143,7 @@ export default function TasksView({tasks = [], refreshData: _refreshData, onFile
     // --- ACTIONS ---
     const handleComplete = async (id) => {
         try {
-            await axios.post(`${API_URL}/dashboard/todoist/tasks/${id}/complete`)
+            await api.post(`/dashboard/todoist/tasks/${id}/complete`)
             refreshTasks()
         } catch {
             alert("Error completing task")
@@ -156,7 +153,7 @@ export default function TasksView({tasks = [], refreshData: _refreshData, onFile
     const handleDelete = async (id) => {
         if(!confirm("Delete this task?")) return;
         try {
-            await axios.delete(`${API_URL}/dashboard/todoist/tasks/${id}`)
+            await api.delete(`/dashboard/todoist/tasks/${id}`)
             refreshTasks()
         } catch {
             alert("Error deleting task")
@@ -266,25 +263,23 @@ const handleSubmit = async (e) => {
         }
 
         if (editMode) {
-            // ✅ IMMEDIATE LOCAL UPDATE
-            const updatedTask = {
-                id: currentTaskId,
-                content: formData.content,
-                description: finalDescription,
-                labels: formData.labels,
-                due: localTasks.find(t => t.id === currentTaskId)?.due,
-                project_id: localTasks.find(t => t.id === currentTaskId)?.project_id
-            };
+            const previousTasks = localTasks;
 
             // Update local state instantly
             setLocalTasks(prev => prev.map(task =>
-                task.id === currentTaskId ? { ...task, ...updatedTask } : task
+                task.id === currentTaskId
+                    ? {...task, content: formData.content, description: finalDescription, labels: formData.labels}
+                    : task
             ));
 
-            // Send to server
-            await axios.post(`${API_URL}/dashboard/todoist/tasks/${currentTaskId}`, payload)
+            try {
+                await api.post(`/dashboard/todoist/tasks/${currentTaskId}`, payload)
+            } catch (err) {
+                setLocalTasks(previousTasks); // undo the optimistic update
+                throw err;                    // lets the outer catch show the alert
+            }
         } else {
-            await axios.post(`${API_URL}/dashboard/todoist/tasks`, payload)
+            await api.post('/dashboard/todoist/tasks', payload)
             // For new tasks, refresh from server
             await refreshTasks();
         }
