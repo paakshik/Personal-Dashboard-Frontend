@@ -260,7 +260,7 @@ export default function ScheduleView({ events = [], refreshData, onFileUpload,is
         if (!window.confirm("Are you sure?")) return;
         try {
             const token = localStorage.getItem('token');
-            await fetch(`API_URL/dashboard/calendar/events/${eventId}`, {
+            await fetch(`${API_URL}/dashboard/calendar/events/${eventId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`

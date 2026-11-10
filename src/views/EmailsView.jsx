@@ -1,5 +1,5 @@
 import {BookOpen, Calendar, Mail, Star, Tag, Trash2, X} from 'lucide-react'
-import {useState} from 'react'
+import {useEffect, useState} from 'react'
 import axios from 'axios'
 import {TrophySpin} from 'react-loading-indicators'
 import {API_BASE_URL} from '../api.jsx';
@@ -20,7 +20,7 @@ const getAuthConfig = () => ({
 const markAsRead = async (messageId) => {
   try {
     await axios.post(
-        `${API_URL}/dashboard/email/${messageId}/read`,
+        `${API_URL}/dashboard/gmail/${messageId}/read`,
       {},
       {
         headers: {
@@ -102,24 +102,28 @@ const modalContentStyle = {
 
 // --- 🛠️ HELPER FUNCTIONS (No change) ---
 
+const toEmailDate = (timestamp) => {
+    if (timestamp === null || timestamp === undefined || timestamp === '') return null;
+    const numeric = Number(timestamp);
+    const date = new Date(Number.isFinite(numeric) ? numeric : timestamp);
+    return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const formatDateKey = (timestamp) => {
-    const date = new Date(parseInt(timestamp));
-    return date.toISOString().split('T')[0];
-}
+    const date = toEmailDate(timestamp);
+    return date ? date.toISOString().split('T')[0] : 'unknown';
+};
 
 const formatDateDisplay = (timestamp) => {
-    const date = new Date(parseInt(timestamp));
+    const date = toEmailDate(timestamp);
+    if (!date) return 'Date unavailable';
     const now = new Date();
     const oneDay = 24 * 60 * 60 * 1000;
-    
     if (date.toDateString() === now.toDateString()) return 'Today';
-    
     const yesterday = new Date(now.getTime() - oneDay);
     if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-    
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-}
-
+};
 const categorizeEmail = (e) => {
     if (!e.labels) return 'OTHER';
     if (e.labels.includes('SPAM') || e.labels.includes('TRASH')) return 'SPAM_OR_TRASH';
@@ -378,12 +382,15 @@ const EmailSection = ({ statusType, emails, fetchEmailContent }) => {
 export default function EmailsView({ emails ,isLoading}) {
     const [selectedEmail, setSelectedEmail] = useState(null);
     const [loadingContent, setLoadingContent] = useState(false);
-const [localEmails, setLocalEmails] = useState(emails)
+    const [localEmails, setLocalEmails] = useState(Array.isArray(emails) ? emails : [])
+    useEffect(() => {
+        setLocalEmails(Array.isArray(emails) ? emails : []);
+    }, [emails]);
 const fetchEmailContent = async (messageId) => {
   setLoadingContent(true);
   try {
     const res = await axios.get(
-        `${API_URL}/dashboard/email/${messageId}`,
+        `${API_URL}/dashboard/gmail/${messageId}`,
       getAuthConfig()
     );
 
