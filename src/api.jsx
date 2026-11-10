@@ -105,12 +105,18 @@ export async function isServerOwner() {
 }
 
 /**
- * Initiate Todoist OAuth by navigating the browser to the backend login endpoint.
- * The backend redirects to Todoist's authorization page; the frontend never sees
- * any client secret or access token.
+ * Initiate Todoist OAuth by asking the backend for an authorization URL, then
+ * navigate the browser to Todoist's authorization page.
+ * The backend holds the client secret and issues the OAuth redirect; the frontend
+ * never sees any client secret or access token.
  */
-export function connectTodoist() {
-    window.location.assign(`${API_BASE_URL}/dashboard/todoist/auth/login`);
+export async function connectTodoist() {
+    const res = await api.post('/dashboard/todoist/auth/start');
+    const authorizationUrl = res.data?.authorization_url;
+    if (typeof authorizationUrl !== 'string' || !authorizationUrl) {
+        throw new Error('Todoist authorization URL missing from server response.');
+    }
+    window.location.assign(authorizationUrl);
 }
 
 /**

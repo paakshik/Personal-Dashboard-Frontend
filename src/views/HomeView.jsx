@@ -77,9 +77,11 @@ const BriefingCard = ({briefing, briefingError, briefingLoading, regenerateBrief
             )}
             {briefingError && !briefing && (
                 <div style={styles.emptyState}>
-                    <p style={{color: '#dc2626', fontSize: '0.9rem', marginBottom: 10}}>AI briefing unavailable</p>
-                    <p style={styles.muted}>The AI assistant could not be reached. Try again later or open the AI
-                        Assistant from Quick Actions.</p>
+                    <p style={{color: '#dc2626', fontSize: '0.9rem', marginBottom: 6}}>AI briefing unavailable</p>
+                    <p style={styles.muted}>{briefingError || 'The AI assistant could not be reached.'}</p>
+                    <button onClick={regenerateBriefing} style={styles.generateBtn}>
+                        <Sparkles size={16} style={{marginRight: 6}}/> Retry
+                    </button>
                 </div>
             )}
             {briefing && (

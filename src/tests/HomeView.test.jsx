@@ -1,13 +1,12 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {render, screen, waitFor} from '@testing-library/react';
 import HomeView from '../views/HomeView.jsx';
+import {fetchBriefing} from '../api.jsx';
 
 vi.mock('../api.jsx', () => ({
     fetchBriefing: vi.fn(),
     API_BASE_URL: 'http://localhost:8000',
 }));
-
-const {fetchBriefing} = require('../api.jsx');
 
 beforeEach(() => {
     localStorage.clear();

@@ -19,6 +19,8 @@ import {connectTodoist, disconnectTodoist, getTodoistConnectionStatus,} from '..
 export default function TodoistConnect() {
     const [status, setStatus] = useState('checking'); // 'checking' | 'connected' | 'disconnected' | 'failed' | 'reauth'
     const [loading, setLoading] = useState(true);
+    const [connecting, setConnecting] = useState(false);
+    const [connectError, setConnectError] = useState(null);
 
     // Read immediate feedback from the OAuth callback redirect (?todoist=connected|error).
     useEffect(() => {
@@ -26,10 +28,12 @@ export default function TodoistConnect() {
         const todoistParam = params.get('todoist');
         if (todoistParam === 'connected') {
             setStatus('connected');
+            setConnectError(null);
             // Clean the query param from the URL without a page reload.
             window.history.replaceState({}, document.title, window.location.pathname);
         } else if (todoistParam === 'error') {
             setStatus('failed');
+            setConnectError('Todoist authorization failed. Please try again.');
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     }, []);
@@ -64,8 +68,17 @@ export default function TodoistConnect() {
         }
     }, []);
 
-    const handleConnect = useCallback(() => {
-        connectTodoist();
+    const handleConnect = useCallback(async () => {
+        setConnecting(true);
+        setConnectError(null);
+        try {
+            await connectTodoist();
+        } catch (error) {
+            setConnectError(error.message || 'Failed to start Todoist authorization. Please try again.');
+            setStatus('failed');
+        } finally {
+            setConnecting(false);
+        }
     }, []);
 
     if (loading) {
@@ -128,16 +141,29 @@ export default function TodoistConnect() {
                 {status === 'connected' ? 'Todoist Connected' : status === 'failed' ? 'Connection Failed' : status === 'reauth' ? 'Reauthorization Required' : 'Todoist Disconnected'}
             </div>
 
+            {connectError ? (
+                <span
+                    style={{
+                        fontSize: '0.75rem',
+                        color: '#dc2626',
+                        textAlign: 'center',
+                    }}
+                >
+                    {connectError}
+                </span>
+            ) : null}
+
             {isConnected ? (
                 <button
                     onClick={handleDisconnect}
+                    disabled={connecting}
                     style={{
                         background: '#dc2626',
                         color: '#fff',
                         border: 'none',
                         padding: '8px 12px',
                         borderRadius: '6px',
-                        cursor: 'pointer',
+                        cursor: connecting ? 'not-allowed' : 'pointer',
                         fontSize: '0.9rem',
                         fontWeight: 600,
                         width: '100%',
@@ -145,6 +171,7 @@ export default function TodoistConnect() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '6px',
+                        opacity: connecting ? 0.6 : 1,
                     }}
                 >
                     <LogOut size={16}/>
@@ -154,13 +181,14 @@ export default function TodoistConnect() {
                 <>
                     <button
                         onClick={handleConnect}
+                        disabled={connecting}
                         style={{
                             background: '#16a34a',
                             color: '#fff',
                             border: 'none',
                             padding: '8px 12px',
                             borderRadius: '6px',
-                            cursor: 'pointer',
+                            cursor: connecting ? 'not-allowed' : 'pointer',
                             fontSize: '0.9rem',
                             fontWeight: 600,
                             width: '100%',
@@ -168,10 +196,11 @@ export default function TodoistConnect() {
                             alignItems: 'center',
                             justifyContent: 'center',
                             gap: '6px',
+                            opacity: connecting ? 0.6 : 1,
                         }}
                     >
                         <Zap size={16}/>
-                        {status === 'reauth' ? 'Reauthorize Todoist' : 'Connect Todoist'}
+                        {connecting ? 'Connecting…' : status === 'reauth' ? 'Reauthorize Todoist' : 'Connect Todoist'}
                     </button>
                     <span
                         style={{
@@ -188,13 +217,14 @@ export default function TodoistConnect() {
             ) : (
                 <button
                     onClick={handleConnect}
+                    disabled={connecting}
                     style={{
                         background: '#16a34a',
                         color: '#fff',
                         border: 'none',
                         padding: '8px 12px',
                         borderRadius: '6px',
-                        cursor: 'pointer',
+                        cursor: connecting ? 'not-allowed' : 'pointer',
                         fontSize: '0.9rem',
                         fontWeight: 600,
                         width: '100%',
@@ -202,10 +232,11 @@ export default function TodoistConnect() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '6px',
+                        opacity: connecting ? 0.6 : 1,
                     }}
                 >
                     <Zap size={16}/>
-                    Connect Todoist
+                    {connecting ? 'Connecting…' : 'Connect Todoist'}
                 </button>
             )}
         </div>
