@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import './App.css'
 import Navbar from './components/Navbar.jsx' 
-import DashboardView from './views/dashboard.jsx'
+import DashboardView from './views/Dashboard.jsx'
 import ProjectsDashboard from './views/ProjectDashboard.jsx';
 import Commandnexus from './views/commandnexus.jsx'
 import ScheduleView from './views/ScheduleView.jsx'
