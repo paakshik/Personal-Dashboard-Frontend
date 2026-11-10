@@ -6,6 +6,9 @@ const mockGet = vi.hoisted(() => vi.fn());
 vi.mock('../api.jsx', () => ({
     default: {get: mockGet, post: vi.fn()},
     getWebSocketUrl: vi.fn(),
+    getTodoistConnectionStatus: vi.fn().mockResolvedValue({connected: false}),
+    disconnectTodoist: vi.fn(),
+    connectTodoist: vi.fn(),
     API_BASE_URL: 'http://localhost:8000',
 }));
 

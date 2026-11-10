@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useState} from 'react';
 import './App.css';
-import api from './api.jsx';
+import api, {connectTodoist, disconnectTodoist, getTodoistConnectionStatus} from './api.jsx';
 import Navbar from './components/Navbar.jsx';
 import OperatorConsole from './views/Dashboard.jsx';
 import HomeView from './views/HomeView.jsx';
@@ -26,6 +26,8 @@ function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isNavCollapsed, setIsNavCollapsed] = useState(false);
     const [isAuthChecking, setIsAuthChecking] = useState(true);
+    const [todoistConnected, setTodoistConnected] = useState(false);
+    const [todoistLoading, setTodoistLoading] = useState(false);
 
     const refreshData = useCallback(async () => {
         if (!user) return;
@@ -42,7 +44,21 @@ function App() {
         setProjects(values[3] || {projects: [], stats: {}});
         setCommands(values[4] || []);
         setSystemVitals(values[5]);
+        await fetchTodoistConnectionStatus();
         setLoading(false);
+    }, [user]);
+
+    const fetchTodoistConnectionStatus = useCallback(async () => {
+        if (!user) return;
+        setTodoistLoading(true);
+        try {
+            const data = await getTodoistConnectionStatus();
+            setTodoistConnected(!!data.connected);
+        } catch {
+            setTodoistConnected(false);
+        } finally {
+            setTodoistLoading(false);
+        }
     }, [user]);
 
     const refreshViewData = useCallback(async (viewName) => {
@@ -73,6 +89,19 @@ function App() {
     useEffect(() => {
         if (['calendar', 'tasks', 'emails', 'projects', 'commands'].includes(activeView)) refreshViewData(activeView);
     }, [activeView, refreshViewData]);
+
+    const handleConnectTodoist = useCallback(() => {
+        connectTodoist();
+    }, []);
+
+    const handleDisconnectTodoist = useCallback(async () => {
+        try {
+            await disconnectTodoist();
+            await fetchTodoistConnectionStatus();
+        } catch {
+            window.alert('Failed to disconnect Todoist. Please try again.');
+        }
+    }, [disconnectTodoist, fetchTodoistConnectionStatus]);
 
     const handleLogout = useCallback(async () => {
         try {
@@ -149,7 +178,9 @@ function App() {
         calendar: <ScheduleView events={events} isLoading={loading} refreshData={() => refreshViewData('calendar')}
                                 onFileUpload={handleFileUpload}/>,
         tasks: <TasksView tasks={tasks} isLoading={loading} refreshData={() => refreshViewData('tasks')}
-                          onFileUpload={handleFileUpload}/>,
+                          onFileUpload={handleFileUpload}
+                          todoistConnected={todoistConnected}
+                          onConnectTodoist={handleConnectTodoist}/>,
         emails: <EmailsView emails={emails} isLoading={loading} refreshData={() => refreshViewData('emails')}/>,
         projects: <ProjectsDashboard projects={projects.projects || []} stats={projects.stats || {}}
                                      refreshData={() => refreshViewData('projects')}/>,
@@ -161,7 +192,7 @@ function App() {
     return <div style={{minHeight: '100vh', color: 'var(--text-main)', backgroundColor: 'var(--bg-main)'}}>
         <Navbar activeView={activeView} setActiveView={setActiveView} refreshData={refreshData} loading={loading}
                 isCollapsed={isNavCollapsed} setIsCollapsed={setIsNavCollapsed} user={user}
-                handleLogout={handleLogout}/>
+                handleLogout={handleLogout} todoistConnected={todoistConnected}/>
         <main style={{
             marginLeft: isNavCollapsed ? '80px' : '250px',
             width: `calc(100% - ${isNavCollapsed ? '80px' : '250px'})`,

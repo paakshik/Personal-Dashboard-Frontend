@@ -71,7 +71,14 @@ const segregateAndSortTasks = (tasks, groupByLabel) => {
     return groupedByLabel;
 };
 
-export default function TasksView({tasks = [], refreshData: _refreshData, onFileUpload, isLoading}) {
+export default function TasksView({
+                                      tasks = [],
+                                      refreshData: _refreshData,
+                                      onFileUpload,
+                                      isLoading,
+                                      todoistConnected = false,
+                                      onConnectTodoist
+                                  }) {
     // State
     const [localTasks, setLocalTasks] = useState(tasks)
     const [loading, setLoading] = useState(false)
@@ -329,8 +336,25 @@ if (isLoading) {
       <TrophySpin color={["#ff0000", "#ffa500", "#ffff00", "#008000", "#0000ff", "#4b0082", "#ee82ee"]} size="small" text="LOADING" textColor={["#ff0000", "#ffa500", "#ffff00", "#008000", "#0000ff", "#4b0082", "#ee82ee"]}/>
     </div>);
     }
+    // Gate the task UI behind Todoist connection.
+    if (!todoistConnected) {
+        return (
+            <div style={styles.connectContainer}>
+                <h2 style={styles.connectTitle}>Connect your Todoist account</h2>
+                <p style={styles.connectSubtitle}>
+                    Connect your Todoist account to view and manage your tasks.
+                </p>
+                {onConnectTodoist && (
+                    <button onClick={onConnectTodoist} style={styles.connectButton}>
+                        Connect Todoist
+                    </button>
+                )}
+            </div>
+        );
+    }
+
     return (
-        
+
         <div style={styles.container}>
             {/* Header / Toolbar */}
             <div style={styles.toolbar}>
@@ -580,6 +604,38 @@ const styles = {
         fontSize: '1rem',
         background: 'transparent',
         color: '#334155'
-    }
+    },
 
+    // Todoist connection gate
+    connectContainer: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '60vh',
+        textAlign: 'center',
+        color: 'var(--text-muted)',
+    },
+    connectTitle: {
+        fontSize: '1.5rem',
+        fontWeight: 700,
+        color: 'var(--text-main)',
+        marginBottom: '8px',
+    },
+    connectSubtitle: {
+        fontSize: '1rem',
+        marginBottom: '20px',
+        color: 'var(--text-muted)',
+    },
+    connectButton: {
+        background: '#16a34a',
+        color: '#fff',
+        border: 'none',
+        padding: '10px 20px',
+        borderRadius: '8px',
+        fontSize: '1rem',
+        fontWeight: 600,
+        cursor: 'pointer',
+        boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)',
+    },
 }

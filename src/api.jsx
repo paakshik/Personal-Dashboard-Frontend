@@ -84,4 +84,30 @@ export async function isServerOwner() {
     }
 }
 
+/**
+ * Initiate Todoist OAuth by navigating the browser to the backend login endpoint.
+ * The backend redirects to Todoist's authorization page; the frontend never sees
+ * any client secret or access token.
+ */
+export function connectTodoist() {
+    window.location.assign(`${API_BASE_URL}/dashboard/todoist/auth/login`);
+}
+
+/**
+ * Get the current user's Todoist connection status.
+ * Resolves to { connected: boolean }.
+ */
+export async function getTodoistConnectionStatus() {
+    const res = await api.get('/dashboard/todoist/connection-status');
+    return res.data;
+}
+
+/**
+ * Disconnect the current user's Todoist account (deletes the stored credential).
+ * No token/secret value is handled by the frontend.
+ */
+export async function disconnectTodoist() {
+    await api.post('/dashboard/todoist/disconnect');
+}
+
 export default api;

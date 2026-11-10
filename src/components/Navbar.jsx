@@ -14,6 +14,7 @@ import {
 
 import {useEffect, useState} from 'react';
 import {API_BASE_URL} from '../api.jsx';
+import TodoistConnect from './TodoistConnect.jsx';
 
 // --- Dynamic Styles ---
 const navbarStyle = (isCollapsed) => ({
@@ -95,7 +96,16 @@ const toggleBtnStyle = {
     zIndex: 20
 }
 
-export default function Navbar({activeView, setActiveView, refreshData, loading, isCollapsed, setIsCollapsed, user}) {
+export default function Navbar({
+                                   activeView,
+                                   setActiveView,
+                                   refreshData,
+                                   loading,
+                                   isCollapsed,
+                                   setIsCollapsed,
+                                   user,
+                                   todoistConnected = false
+                               }) {
     const [isOwner, setIsOwner] = useState(null);
 
     useEffect(() => {
@@ -127,7 +137,7 @@ export default function Navbar({activeView, setActiveView, refreshData, loading,
     const navItems = [
         {id: 'home', label: 'Home', icon: Home},
         { id: 'calendar', label: 'Calendar', icon: Calendar },
-        { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+        {id: 'tasks', label: 'Todoist', icon: CheckSquare},
         { id: 'emails', label: 'Emails', icon: Mail },
         { id: 'projects', label: 'Projects', icon: Folder }, // Fixed: Added icon
         { id: 'commands', label: 'Commands', icon: Terminal }, // Fixed: Added icon
@@ -159,26 +169,46 @@ export default function Navbar({activeView, setActiveView, refreshData, loading,
 
             {/* Navigation Links */}
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
-                {navItems.map(item => (
-                    <div
-                        key={item.id}
-                        style={navItemStyle(activeView === item.id, isCollapsed)}
-                        onClick={() => setActiveView(item.id)}
-                        title={isCollapsed ? item.label : ""}
-                    >
-                        <item.icon size={20} style={{ marginRight: isCollapsed ? 0 : '12px', minWidth: '20px' }} />
+                {navItems.map(item => {
+                    const isTodoist = item.id === 'tasks';
+                    const showConnectBadge = isTodoist && !todoistConnected;
+                    return (
+                        <div
+                            key={item.id}
+                            style={navItemStyle(activeView === item.id, isCollapsed)}
+                            onClick={() => setActiveView(item.id)}
+                            title={isCollapsed ? item.label : ""}
+                        >
+                            <item.icon size={20} style={{marginRight: isCollapsed ? 0 : '12px', minWidth: '20px'}}/>
 
-                        <span style={{
-                            opacity: isCollapsed ? 0 : 1,
-                            width: isCollapsed ? 0 : 'auto',
-                            overflow: 'hidden',
-                            whiteSpace: 'nowrap',
-                            transition: 'opacity 0.2s ease',
-                        }}>
-                            {item.label}
-                        </span>
-                    </div>
-                ))}
+                            <span style={{
+                                opacity: isCollapsed ? 0 : 1,
+                                width: isCollapsed ? 0 : 'auto',
+                                overflow: 'hidden',
+                                whiteSpace: 'nowrap',
+                                transition: 'opacity 0.2s ease',
+                            }}>
+                                {item.label}
+                            </span>
+
+                            {showConnectBadge && (
+                                <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    background: '#dc2626',
+                                    color: '#fff',
+                                    borderRadius: '10px',
+                                    padding: '1px 6px',
+                                    fontSize: '0.65rem',
+                                    fontWeight: 700,
+                                    marginLeft: '6px',
+                                }}>
+                                    Connect
+                                </span>
+                            )}
+                        </div>
+                    );
+                })}
 
                 {isOwner && (
                     <div
@@ -201,6 +231,11 @@ export default function Navbar({activeView, setActiveView, refreshData, loading,
                         </span>
                     </div>
                 )}
+            </div>
+
+            {/* Todoist connect/disconnect control */}
+            <div style={{padding: '0 20px', marginBottom: '10px'}}>
+                <TodoistConnect/>
             </div>
 
             {/* Footer / Refresh */}
