@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import AiView from '../views/aiview.jsx';
 
 class MockWebSocket {
@@ -35,6 +35,26 @@ describe('AI chat view', () => {
     expect(await screen.findByText('Hello')).toBeTruthy();
     MockWebSocket.instance.onmessage({ data: JSON.stringify({ type: 'done' }) });
   });
+
+    it('shows an approval card and sends the chosen approval to the backend', async () => {
+        const axiosInstance = {get: vi.fn().mockResolvedValue({data: []}), post: vi.fn(), delete: vi.fn()};
+        render(<AiView axiosInstance={axiosInstance}/>);
+        MockWebSocket.instance.onmessage({
+            data: JSON.stringify({
+                type: 'confirm',
+                id: 'approval-1',
+                action: 'delete_task',
+                summary: 'Delete task: Write tests'
+            })
+        });
+        expect(await screen.findByText('Delete task: Write tests')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', {name: /approve/i}));
+        expect(JSON.parse(MockWebSocket.instance.sent)).toEqual({
+            type: 'confirm_response',
+            id: 'approval-1',
+            approved: true
+        });
+    });
 
   it('shows a useful message when the backend reports a Gemini error', async () => {
     const axiosInstance = { get: vi.fn().mockResolvedValue({ data: [] }), post: vi.fn(), delete: vi.fn() };

@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import {ArrowUp, Clock, Paperclip, RefreshCw, Sparkles, Trash2, X} from 'lucide-react';
+import {ArrowUp, Check, Clock, Paperclip, RefreshCw, Sparkles, Trash2, X} from 'lucide-react';
 import {getWebSocketUrl} from '../api';
 
 const SUGGESTIONS = [
@@ -17,12 +17,13 @@ const STATUS_LABEL = {
     error: 'Connection failed',
 };
 
-export default function AiView({axiosInstance}) {
+export default function AiView({axiosInstance, refreshData}) {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [socketStatus, setSocketStatus] = useState(() => (localStorage.getItem('token') ? 'connecting' : 'error'));
     const [selectedFile, setSelectedFile] = useState(null);
+    const [pendingApprovals, setPendingApprovals] = useState([]);
     const [connectKey, setConnectKey] = useState(0);
 
     const ws = useRef(null);
@@ -99,6 +100,10 @@ export default function AiView({axiosInstance}) {
                     }
                     return next;
                 });
+            } else if (event.type === 'confirm') {
+                setPendingApprovals((pending) => [...pending, event]);
+            } else if (event.type === 'data_changed') {
+                if (typeof refreshData === 'function') void refreshData();
             } else if (event.type === 'done') {
                 setBusy(false);
                 setMessages((previous) => previous.map((message) => ({...message, streaming: false})));
@@ -133,7 +138,7 @@ export default function AiView({axiosInstance}) {
             socket.close();
             if (ws.current === socket) ws.current = null;
         };
-    }, [connectKey, setBusy, pushMessage]);
+    }, [connectKey, setBusy, pushMessage, refreshData]);
 
     useEffect(() => {
         endRef.current?.scrollIntoView({behavior: 'smooth'});
@@ -183,6 +188,17 @@ export default function AiView({axiosInstance}) {
             pushMessage('assistant', 'Could not send your message. Check your connection and try again.');
             console.error('AI message failed', error);
         }
+    };
+
+    const respondToApproval = (approval, approved) => {
+        const socket = ws.current;
+        setPendingApprovals((pending) => pending.filter((item) => item.id !== approval.id));
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            pushMessage('assistant', 'Chat disconnected, so no change was made. Reconnect and ask again.');
+            return;
+        }
+        socket.send(JSON.stringify({type: 'confirm_response', id: approval.id, approved}));
+        if (!approved) pushMessage('assistant', 'Action cancelled; no change was made.');
     };
 
     const clearHistory = async () => {
@@ -272,6 +288,21 @@ export default function AiView({axiosInstance}) {
                                 </div>
                             ))
                         )}
+                        {pendingApprovals.map((approval) => (
+                            <div className="nx-approval" key={approval.id} role="group"
+                                 aria-label="Confirm requested change">
+                                <strong>Confirm before changing data</strong>
+                                <p>{approval.summary}</p>
+                                <div className="nx-approval-actions">
+                                    <button type="button" className="nx-approve"
+                                            onClick={() => respondToApproval(approval, true)}><Check size={15}/> Approve
+                                    </button>
+                                    <button type="button" className="nx-ghost"
+                                            onClick={() => respondToApproval(approval, false)}>Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
                         {showTyping && (
                             <div className="nx-msg nx-msg-assistant" aria-label="Nexus is thinking">
                                 <span className="nx-avatar"><Sparkles size={16}/></span>
@@ -402,7 +433,12 @@ const css = `
 .nx-column { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 
 /* Messages */
-.nx-msg { display: flex; gap: 12px; align-items: flex-start; }
+.nx-msg { display: flex; gap: 12px; align-items: flex-start; white-space: pre-wrap; }
+.nx-approval { margin: 4px 0 4px 42px; padding: 14px; border: 1px solid #fbbf24; border-radius: 12px; background: #fffbeb; }
+.nx-approval p { margin: 8px 0 12px; line-height: 1.5; }
+.nx-approval-actions { display: flex; gap: 8px; }
+.nx-approve { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; padding: 7px 12px; background: var(--nx-green); color: white !important; font-weight: 700; cursor: pointer; }
+.nx-approve:hover { background: var(--nx-green-dark); }
 .nx-msg-user { justify-content: flex-end; }
 .nx-msg-user .nx-bubble {
   background: var(--nx-green); color: #fff; padding: 10px 14px;
