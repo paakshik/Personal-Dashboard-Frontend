@@ -110,4 +110,13 @@ export async function disconnectTodoist() {
     await api.post('/dashboard/todoist/disconnect');
 }
 
+/**
+ * Request a one-shot AI daily briefing for the authenticated user.
+ * Returns { briefing: string, timestamp: string }.
+ */
+export async function fetchBriefing() {
+    const res = await api.post('/dashboard/gemini/briefing');
+    return res.data;
+}
+
 export default api;

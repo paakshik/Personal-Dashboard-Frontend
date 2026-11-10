@@ -1,5 +1,5 @@
-import React, {useEffect, useRef, useState} from 'react';
-import {getWebSocketTicketUrl} from '../api.jsx';
+import React, {useEffect, useState} from 'react';
+import {fetchBriefing} from '../api.jsx';
 import {Calendar, CheckCircle, Folder, Mail, Plus, RefreshCw, Sparkles,} from 'lucide-react';
 import {TrophySpin} from 'react-loading-indicators';
 
@@ -146,89 +146,22 @@ export default function HomeView({
     const [briefing, setBriefing] = useState(null);
     const [briefingLoading, setBriefingLoading] = useState(false);
     const [briefingError, setBriefingError] = useState(null);
-    const wsRef = useRef(null);
 
     const generateBriefing = async () => {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            setBriefingError('Not authenticated');
-            return;
-        }
         setBriefingLoading(true);
         setBriefingError(null);
         setBriefing(null);
 
-        // Build a summary of the user's day to send to the AI
-        const summaryParts = [];
-        if (totalEvents > 0) summaryParts.push(`${totalEvents} event(s) on your calendar today`);
-        if (safeTasks.length > 0) summaryParts.push(`${safeTasks.length} task(s) in your list`);
-        if (unreadEmails.length > 0) summaryParts.push(`${unreadEmails.length} unread email(s)`);
-        if (safeProjects.length > 0) summaryParts.push(`${safeProjects.length} active project(s)`);
-        const daySummary = summaryParts.length > 0 ? summaryParts.join(', ') : 'a relatively light day';
-        const prompt = `Write a short, friendly daily briefing (2-4 sentences) based on my day: ${daySummary}. Include a gentle prioritization suggestion. Keep it encouraging and concise.`;
-
         try {
-            const wsUrl = await getWebSocketTicketUrl(
-                '/dashboard/gemini/stream',
-                '/dashboard/gemini/ws-ticket'
-            );
-            const socket = new WebSocket(wsUrl);
-            wsRef.current = socket;
-
-            let assistantText = '';
-            let started = false;
-
-            socket.onopen = () => {
-                socket.send(JSON.stringify({prompt}));
-            };
-
-            socket.onmessage = (event) => {
-                let data;
-                try {
-                    data = JSON.parse(event.data);
-                } catch {
-                    return;
-                }
-                if (data.type === 'start') {
-                    started = true;
-                    assistantText = '';
-                } else if (data.type === 'chunk') {
-                    assistantText += data.text || '';
-                } else if (data.type === 'done') {
-                    setBriefing(assistantText || 'No briefing was returned.');
-                    setBriefingLoading(false);
-                    socket.close();
-                } else if (data.type === 'error') {
-                    setBriefingError(data.message || 'The AI assistant failed to respond.');
-                    setBriefingLoading(false);
-                    socket.close();
-                }
-            };
-
-            socket.onerror = () => {
-                setBriefingError('Could not connect to the AI assistant.');
-                setBriefingLoading(false);
-            };
-
-            socket.onclose = () => {
-                if (wsRef.current === socket) wsRef.current = null;
-                if (!started && !briefingError) {
-                    setBriefingError('The AI assistant is unavailable right now.');
-                    setBriefingLoading(false);
-                }
-            };
-
-            // Timeout safety net
-            setTimeout(() => {
-                if (briefingLoading) {
-                    socket.close();
-                    setBriefingLoading(false);
-                    if (!briefing) setBriefingError('The AI assistant took too long to respond.');
-                }
-            }, 15000);
-        } catch {
-            setBriefingError('The AI assistant is unavailable.');
+            const {briefing: text, timestamp} = await fetchBriefing();
+            setBriefing(text || 'No briefing was returned.');
             setBriefingLoading(false);
+        } catch (exc) {
+            setBriefingLoading(false);
+            const message = exc?.response?.data?.detail
+                || exc?.message
+                || 'The AI assistant could not be reached.';
+            setBriefingError(message);
         }
     };
 
@@ -242,11 +175,6 @@ export default function HomeView({
     useEffect(() => {
         // Generate briefing once when data loads
         generateBriefingRef.current();
-        return () => {
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.close();
-            }
-        };
     }, [totalEvents, safeTasks.length, unreadEmails.length, safeProjects.length]);
 
     return (
