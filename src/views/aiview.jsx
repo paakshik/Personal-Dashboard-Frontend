@@ -8,6 +8,7 @@ export default function AiView({axiosInstance}) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [socketStatus, setSocketStatus] = useState('connecting');
   const [selectedFile, setSelectedFile] = useState(null);
     const ws = useRef(null);
     const fileRef = useRef(null);
@@ -30,6 +31,7 @@ export default function AiView({axiosInstance}) {
         if (!token) return undefined;
         const socket = new WebSocket(getWebSocketUrl('/dashboard/gemini/stream', token));
         ws.current = socket;
+        socket.onopen = () => setSocketStatus('connected');
         socket.onmessage = ({data}) => {
             let event;
             try {
@@ -72,9 +74,18 @@ export default function AiView({axiosInstance}) {
                 }]);
             }
     };
-        socket.onerror = () => setLoading(false);
+        socket.onerror = () => {
+            setSocketStatus('error');
+            setLoading(false);
+            setMessages((previous) => [...previous, {role: 'assistant', text: 'Chat connection failed. Refresh the page and try again.', timestamp: new Date().toISOString()}]);
+        };
         socket.onclose = () => {
             if (ws.current === socket) ws.current = null;
+            setSocketStatus('disconnected');
+            setLoading((pending) => {
+                if (pending) setMessages((previous) => [...previous, {role: 'assistant', text: 'Chat disconnected before a reply arrived. Refresh the page and try again.', timestamp: new Date().toISOString()}]);
+                return false;
+            });
         };
         return () => {
             clearTimeout(historyTimer);
@@ -89,7 +100,11 @@ export default function AiView({axiosInstance}) {
 
     const send = async () => {
         const socket = ws.current;
-        if ((!input.trim() && !selectedFile) || !socket || socket.readyState !== WebSocket.OPEN || loading) return;
+        if (!input.trim() && !selectedFile || loading) return;
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            setMessages((previous) => [...previous, {role: 'assistant', text: 'Chat is still connecting. Wait until it is connected, then send your message again.', timestamp: new Date().toISOString()}]);
+            return;
+        }
         const text = input.trim();
         const file = selectedFile;
         setInput('');
@@ -129,6 +144,7 @@ export default function AiView({axiosInstance}) {
     return <section style={{display: 'flex', height: 'calc(100vh - 90px)', background: '#fff'}}>
         <aside style={{width: 240, padding: 20, borderRight: '1px solid #ddd'}}>
             <h2><Clock size={18}/> History</h2>
+            <p role="status" aria-live="polite">Chat {socketStatus}</p>
             <button onClick={clearHistory}><Trash2 size={16}/> Clear History</button>
             {messages.filter((m) => m.role === 'user').map((m) => <p
                 key={m.id || `${m.timestamp}-${m.text}`}>{m.text.slice(0, 42)}</p>)}
@@ -156,7 +172,7 @@ export default function AiView({axiosInstance}) {
                         send();
                     }
                 }} placeholder="Message Nexus AI..." disabled={loading}/>
-                <button onClick={send} disabled={loading || (!input.trim() && !selectedFile)}>Send</button>
+                <button onClick={send} disabled={loading || socketStatus !== 'connected' || (!input.trim() && !selectedFile)}>{socketStatus === 'connected' ? 'Send' : 'Connecting…'}</button>
             </div>
         </main>
     </section>;

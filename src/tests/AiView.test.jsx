@@ -26,6 +26,7 @@ describe('AI chat view', () => {
   it('sends entered text through websocket and renders streamed chunks', async () => {
     const axiosInstance = { get: vi.fn().mockResolvedValue({ data: [] }), post: vi.fn(), delete: vi.fn() };
     render(<AiView axiosInstance={axiosInstance} />);
+    MockWebSocket.instance.onopen();
     fireEvent.change(screen.getAllByPlaceholderText('Message Nexus AI...')[0], { target: { value: 'Hello AI' } });
     fireEvent.click(screen.getByText('Send'));
     await waitFor(() => expect(JSON.parse(MockWebSocket.instance.sent).prompt).toBe('Hello AI'));
@@ -33,5 +34,12 @@ describe('AI chat view', () => {
     MockWebSocket.instance.onmessage({ data: JSON.stringify({ type: 'chunk', text: 'Hello' }) });
     expect(await screen.findByText('Hello')).toBeTruthy();
     MockWebSocket.instance.onmessage({ data: JSON.stringify({ type: 'done' }) });
+  });
+
+  it('shows a useful message when the backend reports a Gemini error', async () => {
+    const axiosInstance = { get: vi.fn().mockResolvedValue({ data: [] }), post: vi.fn(), delete: vi.fn() };
+    render(<AiView axiosInstance={axiosInstance} />);
+    MockWebSocket.instance.onmessage({ data: JSON.stringify({ type: 'error', message: 'Gemini API quota or rate limit reached.' }) });
+    expect(await screen.findByText('Gemini API quota or rate limit reached.')).toBeTruthy();
   });
 });
