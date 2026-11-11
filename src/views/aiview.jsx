@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import {ArrowUp, Check, Clock, Paperclip, RefreshCw, Sparkles, Trash2, X} from 'lucide-react';
+import {ArrowDown, ArrowUp, Check, Clock, Paperclip, RefreshCw, Sparkles, Trash2, X} from 'lucide-react';
 import {fetchConversationMessages, fetchConversations, getWebSocketTicketUrl} from '../api';
 
 const SUGGESTIONS = [
@@ -30,6 +30,7 @@ export default function AiView({axiosInstance, refreshData}) {
     const [loading, setLoading] = useState(false);
     const [socketStatus, setSocketStatus] = useState(() => (localStorage.getItem('token') ? 'connecting' : 'error'));
     const [selectedFile, setSelectedFile] = useState(null);
+    const [uploadingAttachment, setUploadingAttachment] = useState(false);
     const [pendingApprovals, setPendingApprovals] = useState([]);
     const [connectKey, setConnectKey] = useState(0);
 
@@ -45,6 +46,9 @@ export default function AiView({axiosInstance, refreshData}) {
     const ws = useRef(null);
     const fileRef = useRef(null);
     const endRef = useRef(null);
+    const scrollRef = useRef(null);
+    const keepScrolledRef = useRef(true);
+    const [showScrollToBottom, setShowScrollToBottom] = useState(false);
     const textareaRef = useRef(null);
     const loadingRef = useRef(false);
     const axiosRef = useRef(axiosInstance);
@@ -105,6 +109,8 @@ export default function AiView({axiosInstance, refreshData}) {
         try {
             const data = await fetchConversationMessages(conversation.id);
             const restored = Array.isArray(data) ? data : [];
+            keepScrolledRef.current = true;
+            setShowScrollToBottom(false);
             setMessages(
                 restored.map((m) => ({
                     id: m.id,
@@ -224,8 +230,27 @@ export default function AiView({axiosInstance, refreshData}) {
     }, [connectKey, setBusy, pushMessage, refreshData]);
 
     useEffect(() => {
-        endRef.current?.scrollIntoView({behavior: 'smooth'});
+        if (keepScrolledRef.current) {
+            endRef.current?.scrollIntoView({behavior: 'smooth', block: 'end'});
+            setShowScrollToBottom(false);
+        } else {
+            setShowScrollToBottom(true);
+        }
     }, [messages, loading]);
+
+    const handleConversationScroll = () => {
+        const element = scrollRef.current;
+        if (!element) return;
+        const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 120;
+        keepScrolledRef.current = nearBottom;
+        if (nearBottom) setShowScrollToBottom(false);
+    };
+
+    const scrollToLatest = () => {
+        keepScrolledRef.current = true;
+        setShowScrollToBottom(false);
+        endRef.current?.scrollIntoView({behavior: 'smooth', block: 'end'});
+    };
 
     useEffect(() => {
         const element = textareaRef.current;
@@ -259,10 +284,12 @@ export default function AiView({axiosInstance, refreshData}) {
         try {
             let attachmentId;
             if (file) {
+                setUploadingAttachment(true);
                 const form = new FormData();
                 form.append('file', file);
                 const result = await axiosRef.current.post('/dashboard/gemini/upload', form);
                 attachmentId = result.data.file_id;
+                setUploadingAttachment(false);
             }
             socket.send(JSON.stringify({
                 prompt,
@@ -270,6 +297,7 @@ export default function AiView({axiosInstance, refreshData}) {
                 conversation_id: activeConversationId || undefined
             }));
         } catch (error) {
+            setUploadingAttachment(false);
             setBusy(false);
             pushMessage('assistant', 'Could not send your message. Check your connection and try again.');
             console.error('AI message failed', error);
@@ -301,7 +329,6 @@ export default function AiView({axiosInstance, refreshData}) {
         }
     };
 
-    const userMessages = messages.filter((message) => message.role === 'user').reverse();
     const last = messages[messages.length - 1];
     const showTyping = loading && !(last?.role === 'assistant' && last.streaming);
     const canSend = socketStatus === 'connected' && !loading && (input.trim() || selectedFile);
@@ -397,7 +424,7 @@ export default function AiView({axiosInstance, refreshData}) {
                     )}
                 </div>
 
-                <div className="nx-scroll">
+                <div className="nx-scroll" ref={scrollRef} onScroll={handleConversationScroll}>
                     <div className="nx-column">
                         {!messages.length && !loading ? (
                             <div className="nx-empty">
@@ -456,6 +483,12 @@ export default function AiView({axiosInstance, refreshData}) {
                         )}
                         <div ref={endRef}/>
                     </div>
+                    {showScrollToBottom && (
+                        <button type="button" className="nx-scroll-bottom" onClick={scrollToLatest}
+                                aria-label="Scroll to latest message">
+                            <ArrowDown size={16}/> New messages
+                        </button>
+                    )}
                 </div>
 
                 <div className="nx-composer-wrap">
@@ -468,6 +501,9 @@ export default function AiView({axiosInstance, refreshData}) {
                             </button>
                         </div>
                     )}
+                    {uploadingAttachment && <div className="nx-upload-status" role="status"><RefreshCw size={13}
+                                                                                                       className="nx-spin"/> Uploading
+                        attachment…</div>}
                     <div className="nx-composer">
                         <input
                             ref={fileRef}
@@ -508,9 +544,10 @@ export default function AiView({axiosInstance, refreshData}) {
                             className="nx-send"
                             onClick={() => send()}
                             disabled={!canSend}
-                            aria-label="Send message"
+                            aria-label={loading ? 'Sending message' : 'Send message'}
+                            title={loading ? 'Sending…' : 'Send message'}
                         >
-                            <ArrowUp size={18}/>
+                            {loading ? <RefreshCw size={17} className="nx-spin"/> : <ArrowUp size={18}/>}
                         </button>
                     </div>
                     <p className="nx-hint">Enter to send, Shift+Enter for a new line</p>
@@ -531,8 +568,8 @@ const css = `
   --nx-soft: #f3f4f6;
   position: relative;
   display: flex;
-  height: calc(100dvh - 32px);
-  min-height: 480px;
+  height: 100%;
+  min-height: 0;
   width: 100%;
   min-width: 0;
   background: #fff;
@@ -567,16 +604,14 @@ const css = `
 
 /* Sidebar / history panel */
 .nx-side {
-  width: 0; flex-shrink: 0; overflow: hidden;
-  display: flex; flex-direction: column;
-  border-right: 1px solid var(--nx-line);
-  transition: width 0.25s ease, visibility 0.25s ease;
-  visibility: hidden;
+  position: absolute; z-index: 40; top: 54px; bottom: 0; left: 0;
+  width: min(320px, 84vw); overflow: hidden; display: flex; flex-direction: column;
+  background: #fff; border-right: 1px solid var(--nx-line); box-shadow: 8px 0 24px rgba(15, 23, 42, .09);
+  transform: translateX(-105%); visibility: hidden; pointer-events: none;
+  transition: transform 0.2s ease, visibility 0.2s ease;
 }
-.nx-side-closed { width: 0; visibility: hidden; pointer-events: none; }
-.nx-side-open {
-  width: min(300px, 34vw); visibility: visible; pointer-events: auto;
-}
+.nx-side-closed { visibility: hidden; pointer-events: none; }
+.nx-side-open { transform: translateX(0); visibility: visible; pointer-events: auto; }
 .nx-side-head {
   display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
   padding: 20px 16px; flex-shrink: 0;
@@ -629,7 +664,7 @@ const css = `
 .nx-ghost:disabled { opacity: 0.5; cursor: default; }
 
 /* Main column */
-.nx-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.nx-main { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .nx-status {
   display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 18px;
   font-size: 0.85rem; color: var(--nx-muted); border-bottom: 1px solid var(--nx-line);
@@ -640,7 +675,7 @@ const css = `
 .nx-dot-connected { background: #16a34a; }
 .nx-dot-connecting { background: #d97706; }
 .nx-dot-disconnected, .nx-dot-error { background: #dc2626; }
-.nx-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: clamp(14px, 2vw, 24px); }
+.nx-scroll { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: clamp(14px, 2vw, 24px); scroll-behavior: smooth; }
 .nx-column { width: 100%; max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
 
 /* Messages */
@@ -685,10 +720,10 @@ const css = `
 .nx-typing i:nth-child(2) { animation-delay: 0.15s; }
 .nx-typing i:nth-child(3) { animation-delay: 0.3s; }
 @keyframes nx-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-4px); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .nx-typing i { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .nx-typing i, .nx-spin { animation: none; } }
 
 /* Empty state */
-.nx-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 8vh 0 0; }
+.nx-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 28px 0; min-height: min(52vh, 440px); justify-content: center; }
 .nx-empty h2 { margin: 6px 0 0; font-size: 1.5rem; }
 .nx-suggestions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; width: min(420px, 100%); }
 .nx-suggestions button {
@@ -699,7 +734,7 @@ const css = `
 .nx-suggestions button:disabled { opacity: 0.5; cursor: default; }
 
 /* Composer */
-.nx-composer-wrap { flex: 0 0 auto; padding: 8px clamp(12px, 2vw, 22px) 12px; border-top: 1px solid var(--nx-line); background: #fff; }
+.nx-composer-wrap { position: relative; z-index: 2; flex: 0 0 auto; padding: 8px clamp(12px, 2vw, 22px) 12px; border-top: 1px solid var(--nx-line); background: #fff; box-shadow: 0 -5px 18px rgba(15, 23, 42, .035); }
 .nx-composer-wrap > * { width: 100%; max-width: 900px; margin-left: auto; margin-right: auto; }
 .nx-composer {
   display: flex; align-items: flex-end; gap: 6px; padding: 8px;
@@ -720,6 +755,9 @@ const css = `
 .nx-send { background: var(--nx-green); color: #fff; }
 .nx-send:hover:not(:disabled) { background: var(--nx-green-dark); }
 .nx-send:disabled, .nx-icon:disabled { opacity: 0.45; cursor: default; }
+.nx-spin { animation: nx-spin 1s linear infinite; }
+@keyframes nx-spin { to { transform: rotate(360deg); } }
+.nx-upload-status { width: 100%; max-width: 900px; margin: 0 auto 7px; display: flex; align-items: center; gap: 7px; color: var(--nx-muted); font-size: .8rem; }
 .nx-file {
   display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%;
   margin-bottom: 8px; padding: 5px 8px 5px 10px; border-radius: 8px;
@@ -727,7 +765,8 @@ const css = `
 }
 .nx-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nx-file button { border: none; background: transparent; cursor: pointer; display: inline-flex; padding: 2px; color: #4b5563; }
-.nx-hint { margin: 6px 0 0; font-size: 0.78rem; color: var(--nx-muted); text-align: center; }
+.nx-hint { margin: 6px 0 0; font-size: 0.76rem; color: var(--nx-muted); text-align: center; }
+.nx-scroll-bottom { position: sticky; z-index: 3; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; align-items: center; gap: 7px; margin: 0 auto; padding: 8px 12px; border: 1px solid var(--nx-line); border-radius: 999px; background: #fff; box-shadow: 0 4px 16px rgba(15, 23, 42, .12); color: var(--nx-ink); font-size: .82rem; font-weight: 600; cursor: pointer; }
 
 /* Drawer backdrop (mobile overlay) */
 .nx-drawer-backdrop {
@@ -737,21 +776,9 @@ const css = `
 }
 
 @media (max-width: 800px) {
-  .nx-drawer-backdrop { display: block; }
-  .nx-side {
-    position: absolute; inset: 0; width: auto; height: 100%;
-    background: #fff; z-index: 40; border-right: 1px solid var(--nx-line);
-    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.08);
-    transition: transform 0.25s ease, visibility 0.25s ease;
-  }
-  .nx-side.nx-side-closed {
-    transform: translateX(-100%); visibility: hidden; pointer-events: none;
-  }
-  .nx-side.nx-side-open {
-    transform: translateX(0); visibility: visible; pointer-events: auto;
-    width: auto;
-  }
-  .nx-ai { height: calc(100dvh - 24px); min-height: 420px; }
+  .nx-drawer-backdrop { display: block; position: absolute; inset: 54px 0 0; background: rgba(15, 23, 42, .22); z-index: 30; }
+  .nx-side { top: 54px; bottom: 0; width: min(340px, 88vw); }
+  .nx-ai { height: 100%; min-height: 0; }
   .nx-scroll { padding: 14px; }
   .nx-composer-wrap { padding: 8px 12px 10px; }
   .nx-status { padding: 8px 14px; }

@@ -1,5 +1,5 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {render, screen, waitFor} from '@testing-library/react';
+import {fireEvent, render, screen, waitFor} from '@testing-library/react';
 import HomeView from '../views/HomeView.jsx';
 import {fetchBriefing} from '../api.jsx';
 
@@ -22,13 +22,12 @@ describe('HomeView', () => {
     it('renders the greeting header and stat cards with no data', () => {
         render(<HomeView/>);
         expect(screen.getByText(/there!/)).toBeInTheDocument();
-        expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
-        expect(screen.getByText('Upcoming Events')).toBeInTheDocument();
-        expect(screen.getByText('Unread Emails')).toBeInTheDocument();
-        expect(screen.getByText('Active Projects')).toBeInTheDocument();
-        // Both the header Refresh button and Quick Actions Refresh button render
-        expect(screen.getAllByRole('button', {name: 'Refresh'})).toHaveLength(2);
-        expect(screen.getByRole('button', {name: 'Add Task'})).toBeInTheDocument();
+        expect(screen.getByRole('button', {name: /Tasks: 0/})).toBeInTheDocument();
+        expect(screen.getByRole('button', {name: /Events: 0/})).toBeInTheDocument();
+        expect(screen.getByRole('button', {name: /Unread: 0/})).toBeInTheDocument();
+        expect(screen.getByRole('button', {name: /Projects: 0/})).toBeInTheDocument();
+        expect(screen.getAllByRole('button', {name: /Refresh/})).toHaveLength(1);
+        expect(screen.getByRole('button', {name: 'Add task'})).toBeInTheDocument();
         expect(screen.getByRole('button', {name: 'Open AI Assistant'})).toBeInTheDocument();
     });
 
@@ -40,17 +39,25 @@ describe('HomeView', () => {
 
         render(<HomeView events={events} tasks={tasks} emails={emails} projects={projects}/>);
 
+        fireEvent.click(screen.getByRole('button', {name: /Events: 1/}));
         expect(screen.getByText('Team Meeting')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: /Tasks: 1/}));
         expect(screen.getByText('Write tasks')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: /Unread: 1/}));
         expect(screen.getByText('Hello')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: /Projects: 1/}));
         expect(screen.getByText('Dashboard Redesign')).toBeInTheDocument();
     });
 
     it('shows empty states when there is no data', () => {
         render(<HomeView/>);
-        expect(screen.getByText('No events scheduled for today.')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: /Events: 0/}));
+        expect(screen.getByText('No events scheduled.')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: /Tasks: 0/}));
         expect(screen.getByText('No tasks found.')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: /Unread: 0/}));
         expect(screen.getByText('No unread emails.')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: /Projects: 0/}));
         expect(screen.getByText('No projects found.')).toBeInTheDocument();
     });
 
@@ -60,16 +67,20 @@ describe('HomeView', () => {
             timestamp: '2026-11-11T00:00:00Z'
         });
         render(<HomeView/>);
-        await waitFor(() => expect(fetchBriefing).toHaveBeenCalled());
+        expect(fetchBriefing).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', {name: /AI daily briefing/i}));
+        await waitFor(() => expect(fetchBriefing).toHaveBeenCalledTimes(1));
         await waitFor(() => expect(screen.getByText('You have a productive day ahead.')).toBeInTheDocument());
     });
 
     it('shows an error and Retry when the briefing endpoint fails', async () => {
         fetchBriefing.mockRejectedValue({response: {data: {detail: 'Gemini is temporarily unavailable. Please retry in a moment.'}}});
         render(<HomeView/>);
+        fireEvent.click(screen.getByRole('button', {name: /AI daily briefing/i}));
+        await waitFor(() => expect(fetchBriefing).toHaveBeenCalledTimes(1));
         await waitFor(() =>
             expect(screen.getByText('Gemini is temporarily unavailable. Please retry in a moment.')).toBeInTheDocument()
         );
-        expect(screen.getByRole('button', {name: /regenerate briefing/i})).toBeInTheDocument();
+        expect(screen.getByRole('button', {name: /generate briefing/i})).toBeInTheDocument();
     });
 });
