@@ -50,12 +50,13 @@ function App() {
             setTodoistError(null);
         } else {
             const taskFailure = requests[1].reason;
-            if (taskFailure?.response?.status === 403) {
+            const status = taskFailure?.response?.status;
+            if (status === 401 || status === 403) {
                 setTodoistConnected(false);
                 setTasks([]);
-                setTodoistError(null);
+                setTodoistError(taskFailure?.response?.data?.detail || 'Todoist is not connected. Connect Todoist to view your tasks.');
             } else {
-                setTodoistError('Todoist is temporarily unavailable. Previously loaded tasks are preserved. Retry to try again.');
+                setTodoistError(taskFailure?.response?.data?.detail || 'Todoist is temporarily unavailable. Previously loaded tasks are preserved. Retry to try again.');
             }
         }
         setTodoistTaskLoading(false);
@@ -101,12 +102,13 @@ function App() {
             }
         } catch (error) {
             if (viewName === 'tasks') {
-                if (error.response?.status === 403) {
+                const status = error.response?.status;
+                if (status === 401 || status === 403) {
                     setTodoistConnected(false);
                     setTasks([]);
-                    setTodoistError(null);
+                    setTodoistError(error.response?.data?.detail || 'Todoist token rejected. Reconnect Todoist to view your tasks.');
                 } else {
-                    setTodoistError('Todoist is temporarily unavailable. Previously loaded tasks are preserved. Retry to try again.');
+                    setTodoistError(error.response?.data?.detail || 'Todoist is temporarily unavailable. Previously loaded tasks are preserved. Retry to try again.');
                 }
             }
             console.error(`Could not refresh ${viewName}`, error);

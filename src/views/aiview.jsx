@@ -34,6 +34,9 @@ export default function AiView({axiosInstance, refreshData}) {
     const [uploadingAttachment, setUploadingAttachment] = useState(false);
     const [pendingApprovals, setPendingApprovals] = useState([]);
     const [connectKey, setConnectKey] = useState(0);
+    const [wsCloseInfo, setWsCloseInfo] = useState(null); // {code, reason, wasClean}
+    const reconnectTimeoutRef = useRef(null);
+    const reconnectAttemptsRef = useRef(0);
 
     // History panel state
     const [historyOpen, setHistoryOpen] = useState(false);
@@ -199,18 +202,23 @@ export default function AiView({axiosInstance, refreshData}) {
                     }
                 };
 
-                socket.onerror = () => {
+                socket.onerror = (event) => {
                     if (!mounted) return;
                     setSocketStatus('error');
                 };
 
-                socket.onclose = () => {
+                socket.onclose = (event) => {
                     if (!mounted) return;
+                    setWsCloseInfo({code: event.code, reason: event.reason || 'Unknown', wasClean: event.wasClean});
                     if (ws.current === socket) ws.current = null;
                     setSocketStatus((current) => (current === 'error' ? 'error' : 'disconnected'));
                     if (loadingRef.current) {
                         setBusy(false);
                         pushMessage('assistant', 'The connection closed before a reply arrived. Select Reconnect, then send your message again.');
+                    }
+                    // Auto-reconnect with backoff only for unexpected closures (not user-initiated reloads)
+                    if (!loadingRef.current && event.code !== 1001) {
+                        scheduleReconnect();
                     }
                 };
             } catch (error) {
@@ -222,11 +230,12 @@ export default function AiView({axiosInstance, refreshData}) {
 
         return () => {
             mounted = false;
+            cancelScheduledReconnect();
             if (ws.current?.readyState === WebSocket.OPEN) {
                 ws.current.close();
             }
         };
-    }, [connectKey, setBusy, pushMessage, refreshData]);
+    }, [connectKey, setBusy, pushMessage, refreshData, cancelScheduledReconnect]);
 
     useEffect(() => {
         if (keepScrolledRef.current) {
@@ -261,6 +270,23 @@ export default function AiView({axiosInstance, refreshData}) {
     const reconnect = () => {
         setSocketStatus('reconnecting');
         setConnectKey((key) => key + 1);
+    };
+
+    const scheduleReconnect = () => {
+        // Exponential backoff: 1s, 2s, 4s, 8s... capped at 30s
+        const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 30000);
+        reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectAttemptsRef.current += 1;
+            reconnect();
+        }, delay);
+    };
+
+    const cancelScheduledReconnect = () => {
+        if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = null;
+        }
+        reconnectAttemptsRef.current = 0;
     };
 
     const send = async (override) => {
@@ -360,6 +386,11 @@ export default function AiView({axiosInstance, refreshData}) {
                                     <RefreshCw size={14}/>}
                                 {socketStatus === 'reconnecting' ? 'Reconnecting…' : 'Reconnect'}
                             </button>
+                        )}
+                        {wsCloseInfo && (
+                            <span className="nx-muted" style={{fontSize: '0.75rem', marginLeft: 8}}>
+                                Closed: {wsCloseInfo.code} {wsCloseInfo.reason}
+                            </span>
                         )}
                     </div>
                 </div>

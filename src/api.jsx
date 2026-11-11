@@ -144,9 +144,20 @@ export async function connectTodoist() {
 /**
  * Get the current user's Todoist connection status.
  * Resolves to { connected: boolean }.
+ * Uses the dedicated /dashboard/todoist/status endpoint so the frontend
+ * reflects the actual stored-token state rather than local UI state.
  */
 export async function getTodoistConnectionStatus() {
-    const res = await api.get('/dashboard/todoist/auth/connection-status');
+    const res = await api.get('/dashboard/todoist/status');
+    return res.data;
+}
+
+/**
+ * Get the current user's Todoist task-loading status.
+ * Resolves to { connected: boolean } from /dashboard/todoist/status.
+ */
+export async function fetchTodoistStatus() {
+    const res = await api.get('/dashboard/todoist/status');
     return res.data;
 }
 
