@@ -17,6 +17,7 @@ import {
 import {useEffect, useState} from 'react'
 import {TrophySpin} from 'react-loading-indicators';
 import api from '../api.jsx';
+import TodoistConnect from '../components/TodoistConnect.jsx';
 // --- 💎 COMPONENT: COMPACT ATTACHMENT CARD ---
 const AttachmentCard = ({ file, onRemove }) => (
     <div style={styles.fileCard}>
@@ -347,11 +348,7 @@ if (isLoading) {
                     Connect your Todoist account to view and manage your tasks.
                 </p>
                 {todoistConnectError && <p role="alert">{todoistConnectError}</p>}
-                {onConnectTodoist && (
-                    <button onClick={onConnectTodoist} disabled={todoistConnecting} style={styles.connectButton}>
-                        {todoistConnecting ? 'Connecting…' : 'Connect Todoist'}
-                    </button>
-                )}
+                <TodoistConnect/>
             </div>
         );
     }

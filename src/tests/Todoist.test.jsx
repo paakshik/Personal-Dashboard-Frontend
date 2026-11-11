@@ -95,7 +95,7 @@ describe('TasksView connection gate', () => {
     it('shows connection-gated UI when Todoist is not connected', () => {
         render(<TasksView tasks={[]} todoistConnected={false} onConnectTodoist={vi.fn()} isLoading={false}/>);
         expect(screen.getByRole('heading', {name: 'Connect your Todoist account'})).toBeInTheDocument();
-        expect(screen.getByRole('button', {name: 'Connect Todoist'})).toBeInTheDocument();
+        expect(screen.getByText('Checking Todoist connection…')).toBeInTheDocument();
     });
 
     it('does not show the connection-gated UI when Todoist is connected', () => {

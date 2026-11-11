@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useState} from 'react';
 import './App.css';
-import api, {connectTodoist, disconnectTodoist, getTodoistConnectionStatus} from './api.jsx';
+import api, {getTodoistConnectionStatus} from './api.jsx';
 import Navbar from './components/Navbar.jsx';
 import OperatorConsole from './views/Dashboard.jsx';
 import HomeView from './views/HomeView.jsx';
@@ -27,9 +27,6 @@ function App() {
     const [isNavCollapsed, setIsNavCollapsed] = useState(false);
     const [isAuthChecking, setIsAuthChecking] = useState(true);
     const [todoistConnected, setTodoistConnected] = useState(false);
-    const [todoistLoading, setTodoistLoading] = useState(false);
-    const [todoistConnecting, setTodoistConnecting] = useState(false);
-    const [todoistConnectError, setTodoistConnectError] = useState(null);
 
     const refreshData = useCallback(async () => {
         if (!user) return;
@@ -52,14 +49,11 @@ function App() {
 
     const fetchTodoistConnectionStatus = useCallback(async () => {
         if (!user) return;
-        setTodoistLoading(true);
         try {
             const data = await getTodoistConnectionStatus();
             setTodoistConnected(!!data.connected);
         } catch {
             setTodoistConnected(false);
-        } finally {
-            setTodoistLoading(false);
         }
     }, [user]);
 
@@ -91,28 +85,6 @@ function App() {
     useEffect(() => {
         if (['calendar', 'tasks', 'emails', 'projects', 'commands'].includes(activeView)) refreshViewData(activeView);
     }, [activeView, refreshViewData]);
-
-    const handleConnectTodoist = useCallback(async () => {
-        if (todoistConnecting) return;
-        setTodoistConnecting(true);
-        setTodoistConnectError(null);
-        try {
-            await connectTodoist();
-        } catch (error) {
-            setTodoistConnectError(error.message || 'Could not start Todoist authorization. Sign in again or contact the dashboard administrator.');
-        } finally {
-            setTodoistConnecting(false);
-        }
-    }, [todoistConnecting]);
-
-    const handleDisconnectTodoist = useCallback(async () => {
-        try {
-            await disconnectTodoist();
-            await fetchTodoistConnectionStatus();
-        } catch {
-            window.alert('Failed to disconnect Todoist. Please try again.');
-        }
-    }, [disconnectTodoist, fetchTodoistConnectionStatus]);
 
     const handleLogout = useCallback(async () => {
         try {
@@ -190,10 +162,7 @@ function App() {
                                 onFileUpload={handleFileUpload}/>,
         tasks: <TasksView tasks={tasks} isLoading={loading} refreshData={() => refreshViewData('tasks')}
                           onFileUpload={handleFileUpload}
-                          todoistConnected={todoistConnected}
-                          onConnectTodoist={handleConnectTodoist}
-                          todoistConnecting={todoistConnecting}
-                          todoistConnectError={todoistConnectError}/>,
+                          todoistConnected={todoistConnected}/>,
         emails: <EmailsView emails={emails} isLoading={loading} refreshData={() => refreshViewData('emails')}/>,
         projects: <ProjectsDashboard projects={projects.projects || []} stats={projects.stats || {}}
                                      refreshData={() => refreshViewData('projects')}/>,
@@ -205,12 +174,14 @@ function App() {
     return <div style={{minHeight: '100vh', color: 'var(--text-main)', backgroundColor: 'var(--bg-main)'}}>
         <Navbar activeView={activeView} setActiveView={setActiveView} refreshData={refreshData} loading={loading}
                 isCollapsed={isNavCollapsed} setIsCollapsed={setIsNavCollapsed} user={user}
-                handleLogout={handleLogout} todoistConnected={todoistConnected}/>
+                handleLogout={handleLogout}/>
         <main style={{
             marginLeft: isNavCollapsed ? '80px' : '250px',
             width: `calc(100% - ${isNavCollapsed ? '80px' : '250px'})`,
-            padding: 35,
-            minHeight: '100vh'
+            padding: activeView === 'AI' ? 12 : 28,
+            minHeight: activeView === 'AI' ? 0 : '100vh',
+            height: activeView === 'AI' ? '100vh' : 'auto',
+            overflow: activeView === 'AI' ? 'hidden' : 'visible'
         }}>
             {views[activeView] || views.home}
         </main>

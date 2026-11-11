@@ -14,7 +14,6 @@ import {
 
 import {useEffect, useState} from 'react';
 import {API_BASE_URL} from '../api.jsx';
-import TodoistConnect from './TodoistConnect.jsx';
 
 // --- Dynamic Styles ---
 const navbarStyle = (isCollapsed) => ({
@@ -103,8 +102,7 @@ export default function Navbar({
                                    loading,
                                    isCollapsed,
                                    setIsCollapsed,
-                                   user,
-                                   todoistConnected = false
+                                   user
                                }) {
     const [isOwner, setIsOwner] = useState(null);
 
@@ -170,8 +168,6 @@ export default function Navbar({
             {/* Navigation Links */}
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
                 {navItems.map(item => {
-                    const isTodoist = item.id === 'tasks';
-                    const showConnectBadge = isTodoist && !todoistConnected;
                     return (
                         <div
                             key={item.id}
@@ -191,21 +187,6 @@ export default function Navbar({
                                 {item.label}
                             </span>
 
-                            {showConnectBadge && (
-                                <span style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    background: '#dc2626',
-                                    color: '#fff',
-                                    borderRadius: '10px',
-                                    padding: '1px 6px',
-                                    fontSize: '0.65rem',
-                                    fontWeight: 700,
-                                    marginLeft: '6px',
-                                }}>
-                                    Connect
-                                </span>
-                            )}
                         </div>
                     );
                 })}
@@ -231,11 +212,6 @@ export default function Navbar({
                         </span>
                     </div>
                 )}
-            </div>
-
-            {/* Todoist connect/disconnect control */}
-            <div style={{padding: '0 20px', marginBottom: '10px'}}>
-                <TodoistConnect/>
             </div>
 
             {/* Footer / Refresh */}

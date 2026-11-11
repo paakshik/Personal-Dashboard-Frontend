@@ -531,11 +531,16 @@ const css = `
   --nx-soft: #f3f4f6;
   position: relative;
   display: flex;
-  height: calc(100vh - 90px);
-  min-height: 0;
+  height: calc(100dvh - 32px);
+  min-height: 480px;
+  width: 100%;
+  min-width: 0;
   background: #fff;
   color: var(--nx-ink);
   font-family: inherit;
+  border: 1px solid var(--nx-line);
+  border-radius: 14px;
+  overflow: hidden;
 }
 .nx-ai *, .nx-ai *::before, .nx-ai *::after { box-sizing: border-box; }
 .nx-ai button, .nx-ai textarea { font: inherit; color: inherit; }
@@ -545,7 +550,7 @@ const css = `
 /* Main header with the history toggle */
 .nx-head {
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 24px; border-bottom: 1px solid var(--nx-line);
+  min-height: 54px; padding: 8px 18px; border-bottom: 1px solid var(--nx-line);
 }
 .nx-history-toggle {
   display: inline-flex; align-items: center; gap: 8px;
@@ -570,7 +575,7 @@ const css = `
 }
 .nx-side-closed { width: 0; visibility: hidden; pointer-events: none; }
 .nx-side-open {
-  width: 320px; visibility: visible; pointer-events: auto;
+  width: min(300px, 34vw); visibility: visible; pointer-events: auto;
 }
 .nx-side-head {
   display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
@@ -626,7 +631,7 @@ const css = `
 /* Main column */
 .nx-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .nx-status {
-  display: flex; align-items: center; gap: 8px; padding: 12px 24px;
+  display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 18px;
   font-size: 0.85rem; color: var(--nx-muted); border-bottom: 1px solid var(--nx-line);
   flex-shrink: 0;
 }
@@ -635,8 +640,8 @@ const css = `
 .nx-dot-connected { background: #16a34a; }
 .nx-dot-connecting { background: #d97706; }
 .nx-dot-disconnected, .nx-dot-error { background: #dc2626; }
-.nx-scroll { flex: 1; overflow-y: auto; padding: 24px; }
-.nx-column { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.nx-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: clamp(14px, 2vw, 24px); }
+.nx-column { width: 100%; max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
 
 /* Messages */
 .nx-msg { display: flex; gap: 12px; align-items: flex-start; white-space: pre-wrap; }
@@ -694,8 +699,8 @@ const css = `
 .nx-suggestions button:disabled { opacity: 0.5; cursor: default; }
 
 /* Composer */
-.nx-composer-wrap { padding: 8px 24px 16px; }
-.nx-composer-wrap > * { max-width: 720px; margin-left: auto; margin-right: auto; }
+.nx-composer-wrap { flex: 0 0 auto; padding: 8px clamp(12px, 2vw, 22px) 12px; border-top: 1px solid var(--nx-line); background: #fff; }
+.nx-composer-wrap > * { width: 100%; max-width: 900px; margin-left: auto; margin-right: auto; }
 .nx-composer {
   display: flex; align-items: flex-end; gap: 6px; padding: 8px;
   border: 1px solid #d1d5db; border-radius: 16px; background: #fff;
@@ -746,8 +751,9 @@ const css = `
     transform: translateX(0); visibility: visible; pointer-events: auto;
     width: auto;
   }
-  .nx-scroll { padding: 16px; }
-  .nx-composer-wrap { padding: 8px 12px 12px; }
-  .nx-status { padding: 10px 16px; }
+  .nx-ai { height: calc(100dvh - 24px); min-height: 420px; }
+  .nx-scroll { padding: 14px; }
+  .nx-composer-wrap { padding: 8px 12px 10px; }
+  .nx-status { padding: 8px 14px; }
 }
 `;
