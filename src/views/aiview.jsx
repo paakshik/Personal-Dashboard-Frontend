@@ -54,10 +54,42 @@ export default function AiView({axiosInstance, refreshData}) {
     const textareaRef = useRef(null);
     const loadingRef = useRef(false);
     const axiosRef = useRef(axiosInstance);
+    const refreshDataRef = useRef(refreshData);
 
     useEffect(() => {
         axiosRef.current = axiosInstance;
     }, [axiosInstance]);
+
+    // Keep a fresh reference to refreshData so parent rerenders do not reconnect the socket.
+    useEffect(() => {
+        refreshDataRef.current = refreshData;
+    }, [refreshData]);
+
+    // Reconnect helpers declared before the WebSocket effect so they are in
+    // scope when the effect evaluates its dependency array.
+    const cancelScheduledReconnect = useCallback(() => {
+        if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = null;
+        }
+    }, []);
+
+    const reconnect = useCallback(() => {
+        setSocketStatus('reconnecting');
+        setConnectKey((key) => key + 1);
+    }, [setSocketStatus, setConnectKey]);
+
+    const scheduleReconnect = useCallback(() => {
+        // Prevent duplicate scheduled reconnects.
+        if (reconnectTimeoutRef.current) return;
+        // Exponential backoff: 1s, 2s, 4s, 8s... capped at 30s.
+        const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 30000);
+        reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectTimeoutRef.current = null;
+            reconnectAttemptsRef.current += 1;
+            reconnect();
+        }, delay);
+    }, [reconnect]);
 
     const setBusy = useCallback((value) => {
         loadingRef.current = value;
@@ -152,6 +184,7 @@ export default function AiView({axiosInstance, refreshData}) {
                 socket.onopen = () => {
                     if (!mounted) return;
                     setSocketStatus('connected');
+                    reconnectAttemptsRef.current = 0;
                 };
 
                 socket.onmessage = ({data}) => {
@@ -185,7 +218,7 @@ export default function AiView({axiosInstance, refreshData}) {
                     } else if (event.type === 'confirm') {
                         setPendingApprovals((pending) => [...pending, event]);
                     } else if (event.type === 'data_changed') {
-                        if (typeof refreshData === 'function') void refreshData();
+                        if (typeof refreshDataRef.current === 'function') void refreshDataRef.current();
                     } else if (event.type === 'done') {
                         setBusy(false);
                         setMessages((previous) => previous.map((message) => ({...message, streaming: false})));
@@ -235,7 +268,7 @@ export default function AiView({axiosInstance, refreshData}) {
                 ws.current.close();
             }
         };
-    }, [connectKey, setBusy, pushMessage, refreshData, cancelScheduledReconnect]);
+    }, [connectKey, setBusy, pushMessage, scheduleReconnect, cancelScheduledReconnect]);
 
     useEffect(() => {
         if (keepScrolledRef.current) {
@@ -266,28 +299,6 @@ export default function AiView({axiosInstance, refreshData}) {
         element.style.height = 'auto';
         element.style.height = `${Math.min(element.scrollHeight, 160)}px`;
     }, [input]);
-
-    const reconnect = () => {
-        setSocketStatus('reconnecting');
-        setConnectKey((key) => key + 1);
-    };
-
-    const scheduleReconnect = () => {
-        // Exponential backoff: 1s, 2s, 4s, 8s... capped at 30s
-        const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 30000);
-        reconnectTimeoutRef.current = setTimeout(() => {
-            reconnectAttemptsRef.current += 1;
-            reconnect();
-        }, delay);
-    };
-
-    const cancelScheduledReconnect = () => {
-        if (reconnectTimeoutRef.current) {
-            clearTimeout(reconnectTimeoutRef.current);
-            reconnectTimeoutRef.current = null;
-        }
-        reconnectAttemptsRef.current = 0;
-    };
 
     const send = async (override) => {
         const socket = ws.current;
