@@ -27,36 +27,58 @@ function App() {
     const [isNavCollapsed, setIsNavCollapsed] = useState(false);
     const [isAuthChecking, setIsAuthChecking] = useState(true);
     const [todoistConnected, setTodoistConnected] = useState(false);
+    const [todoistStatusLoading, setTodoistStatusLoading] = useState(true);
+    const [todoistTaskLoading, setTodoistTaskLoading] = useState(false);
+    const [todoistError, setTodoistError] = useState(null);
 
     const refreshData = useCallback(async () => {
         if (!user) return;
         setLoading(true);
+        setTodoistTaskLoading(true);
         const requests = await Promise.allSettled([
-            api.get('/dashboard/calendar/events'), api.get('/dashboard/todoist'),
-            api.get('/dashboard/gmail'), api.get('/dashboard/projects'),
-            api.get('/dashboard/commands'), api.get('/dashboard/system/current'),
-    ]);
+            api.get('/dashboard/calendar/events'),
+            api.get('/dashboard/todoist'),
+            api.get('/dashboard/gmail'),
+            api.get('/dashboard/projects'),
+            api.get('/dashboard/commands'),
+            api.get('/dashboard/system/current'),
+        ]);
         const values = requests.map((result) => result.status === 'fulfilled' ? result.value.data : null);
-        setEvents(values[0] || []);
-        setTasks(values[1] || []);
-        setEmails(values[2] || []);
-        setProjects(values[3] || {projects: [], stats: {}});
-        setCommands(values[4] || []);
-        setSystemVitals(values[5]);
+        if (values[0] !== null) setEvents(values[0]);
+        if (values[1] !== null) {
+            setTasks(Array.isArray(values[1]) ? values[1] : []);
+            setTodoistError(null);
+        } else {
+            const taskFailure = requests[1].reason;
+            if (taskFailure?.response?.status === 403) {
+                setTodoistConnected(false);
+                setTasks([]);
+                setTodoistError(null);
+            } else {
+                setTodoistError('Todoist is temporarily unavailable. Previously loaded tasks are preserved. Retry to try again.');
+            }
+        }
+        setTodoistTaskLoading(false);
+        if (values[2] !== null) setEmails(values[2]);
+        if (values[3] !== null) setProjects(values[3] || {projects: [], stats: {}});
+        if (values[4] !== null) setCommands(values[4]);
+        if (values[5] !== null) setSystemVitals(values[5]);
         await fetchTodoistConnectionStatus();
         setLoading(false);
     }, [user]);
-
     const fetchTodoistConnectionStatus = useCallback(async () => {
         if (!user) return;
+        setTodoistStatusLoading(true);
         try {
             const data = await getTodoistConnectionStatus();
             setTodoistConnected(!!data.connected);
+            if (!data.connected) setTasks([]);
         } catch {
-            setTodoistConnected(false);
+            setTodoistError('Todoist connection status is temporarily unavailable. Retry to check your connection.');
+        } finally {
+            setTodoistStatusLoading(false);
         }
     }, [user]);
-
     const refreshViewData = useCallback(async (viewName) => {
         if (!user) return;
         const requests = {
@@ -69,16 +91,30 @@ function App() {
         const request = requests[viewName];
         if (!request) return;
         setLoading(true);
+        if (viewName === 'tasks') setTodoistTaskLoading(true);
         try {
             const response = await api.get(request[0]);
             request[1](response.data);
+            if (viewName === 'tasks') {
+                setTodoistError(null);
+                await fetchTodoistConnectionStatus();
+            }
         } catch (error) {
+            if (viewName === 'tasks') {
+                if (error.response?.status === 403) {
+                    setTodoistConnected(false);
+                    setTasks([]);
+                    setTodoistError(null);
+                } else {
+                    setTodoistError('Todoist is temporarily unavailable. Previously loaded tasks are preserved. Retry to try again.');
+                }
+            }
             console.error(`Could not refresh ${viewName}`, error);
         } finally {
+            if (viewName === 'tasks') setTodoistTaskLoading(false);
             setLoading(false);
         }
-    }, [user]);
-
+    }, [user, fetchTodoistConnectionStatus]);
     useEffect(() => {
         if (isAuthenticated && user) refreshData();
     }, [isAuthenticated, user, refreshData]);
@@ -86,6 +122,43 @@ function App() {
         if (['calendar', 'tasks', 'emails', 'projects', 'commands'].includes(activeView)) refreshViewData(activeView);
     }, [activeView, refreshViewData]);
 
+    useEffect(() => {
+        if (!isAuthenticated || !user) return;
+        const params = new URLSearchParams(window.location.search);
+        const callbackStatus = params.get('todoist');
+        if (!callbackStatus) return;
+
+        params.delete('todoist');
+        params.delete('reason');
+        const query = params.toString();
+        window.history.replaceState({}, document.title, `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+
+        let cancelled = false;
+        const refreshTodoistAfterCallback = async () => {
+            try {
+                const status = await getTodoistConnectionStatus();
+                if (cancelled) return;
+                setTodoistConnected(!!status.connected);
+                if (status.connected) {
+                    const response = await api.get('/dashboard/todoist');
+                    if (!cancelled && Array.isArray(response.data)) {
+                        setTasks(response.data);
+                        setTodoistError(null);
+                    }
+                } else if (callbackStatus === 'connected') {
+                    setTodoistError('Todoist approved access, but no saved connection was found. Retry connection or check backend callback logs.');
+                } else {
+                    setTodoistError('Todoist authorization was not completed. Open the Todoist page to retry.');
+                }
+            } catch {
+                if (!cancelled) setTodoistError('Todoist callback returned, but connection status or tasks could not be refreshed. Open Todoist and retry.');
+            }
+        };
+        void refreshTodoistAfterCallback();
+        return () => {
+            cancelled = true;
+        };
+    }, [isAuthenticated, user]);
     const handleLogout = useCallback(async () => {
         try {
             await api.post('/dashboard/auth/google/logout', {});
@@ -162,7 +235,15 @@ function App() {
                                 onFileUpload={handleFileUpload}/>,
         tasks: <TasksView tasks={tasks} isLoading={loading} refreshData={() => refreshViewData('tasks')}
                           onFileUpload={handleFileUpload}
-                          todoistConnected={todoistConnected}/>,
+                          todoistConnected={todoistConnected}
+                          todoistStatusLoading={todoistStatusLoading}
+                          todoistTaskLoading={todoistTaskLoading}
+                          todoistError={todoistError}
+                          onRetryTodoist={() => {
+                              void refreshViewData('tasks');
+                              void fetchTodoistConnectionStatus();
+                          }}/>,
+
         emails: <EmailsView emails={emails} isLoading={loading} refreshData={() => refreshViewData('emails')}/>,
         projects: <ProjectsDashboard projects={projects.projects || []} stats={projects.stats || {}}
                                      refreshData={() => refreshViewData('projects')}/>,

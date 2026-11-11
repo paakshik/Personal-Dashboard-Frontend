@@ -80,7 +80,11 @@ export default function TasksView({
                                       todoistConnected = false,
                                       onConnectTodoist,
                                       todoistConnecting = false,
-                                      todoistConnectError = null
+                                      todoistConnectError = null,
+                                      todoistStatusLoading = false,
+                                      todoistTaskLoading = false,
+                                      todoistError = null,
+                                      onRetryTodoist
                                   }) {
     // State
     const [localTasks, setLocalTasks] = useState(tasks)
@@ -356,6 +360,11 @@ if (isLoading) {
     return (
 
         <div style={styles.container}>
+            {todoistStatusLoading && <div role="status" style={styles.taskNotice}>Checking Todoist connection…</div>}
+            {todoistTaskLoading && <div role="status" style={styles.taskNotice}>Refreshing Todoist tasks…</div>}
+            {todoistError && <div role="alert" style={styles.taskError}><span>{todoistError}</span>
+                <button type="button" onClick={onRetryTodoist} style={styles.retryButton}>Retry</button>
+            </div>}
             {/* Header / Toolbar */}
             <div style={styles.toolbar}>
                 <div style={styles.viewToggle}>
@@ -605,8 +614,7 @@ const styles = {
         background: 'transparent',
         color: '#334155'
     },
-
-    // Todoist connection gate
+    // Todoist connection gat
     connectContainer: {
         display: 'flex',
         flexDirection: 'column',
