@@ -28,6 +28,8 @@ function App() {
     const [isAuthChecking, setIsAuthChecking] = useState(true);
     const [todoistConnected, setTodoistConnected] = useState(false);
     const [todoistLoading, setTodoistLoading] = useState(false);
+    const [todoistConnecting, setTodoistConnecting] = useState(false);
+    const [todoistConnectError, setTodoistConnectError] = useState(null);
 
     const refreshData = useCallback(async () => {
         if (!user) return;
@@ -90,9 +92,18 @@ function App() {
         if (['calendar', 'tasks', 'emails', 'projects', 'commands'].includes(activeView)) refreshViewData(activeView);
     }, [activeView, refreshViewData]);
 
-    const handleConnectTodoist = useCallback(() => {
-        connectTodoist();
-    }, []);
+    const handleConnectTodoist = useCallback(async () => {
+        if (todoistConnecting) return;
+        setTodoistConnecting(true);
+        setTodoistConnectError(null);
+        try {
+            await connectTodoist();
+        } catch (error) {
+            setTodoistConnectError(error.message || 'Could not start Todoist authorization. Sign in again or contact the dashboard administrator.');
+        } finally {
+            setTodoistConnecting(false);
+        }
+    }, [todoistConnecting]);
 
     const handleDisconnectTodoist = useCallback(async () => {
         try {
@@ -180,7 +191,9 @@ function App() {
         tasks: <TasksView tasks={tasks} isLoading={loading} refreshData={() => refreshViewData('tasks')}
                           onFileUpload={handleFileUpload}
                           todoistConnected={todoistConnected}
-                          onConnectTodoist={handleConnectTodoist}/>,
+                          onConnectTodoist={handleConnectTodoist}
+                          todoistConnecting={todoistConnecting}
+                          todoistConnectError={todoistConnectError}/>,
         emails: <EmailsView emails={emails} isLoading={loading} refreshData={() => refreshViewData('emails')}/>,
         projects: <ProjectsDashboard projects={projects.projects || []} stats={projects.stats || {}}
                                      refreshData={() => refreshViewData('projects')}/>,

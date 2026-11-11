@@ -111,12 +111,34 @@ export async function isServerOwner() {
  * never sees any client secret or access token.
  */
 export async function connectTodoist() {
-    const res = await api.post('/dashboard/todoist/auth/start');
-    const authorizationUrl = res.data?.authorization_url;
-    if (typeof authorizationUrl !== 'string' || !authorizationUrl) {
-        throw new Error('Todoist authorization URL missing from server response.');
+    try {
+        const res = await api.post('/dashboard/todoist/auth/start');
+        const authorizationUrl = res.data?.authorization_url;
+        let parsedUrl;
+        try {
+            parsedUrl = new URL(authorizationUrl);
+        } catch {
+            throw new Error('The server returned an invalid Todoist authorization URL. Please contact support.');
+        }
+        if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname !== 'app.todoist.com') {
+            throw new Error('The server returned an unexpected Todoist authorization URL. Please contact support.');
+        }
+        window.location.assign(parsedUrl.toString());
+    } catch (error) {
+        if (error.response) {
+            const detail = error.response.data?.error || error.response.data?.detail;
+            if (error.response.status === 401) {
+                const authError = new Error('Your dashboard session has expired. Sign in again, then reconnect Todoist.');
+                authError.statusCode = 401;
+                throw authError;
+            }
+            if (error.response.status === 503) {
+                throw new Error(detail || 'Todoist authorization is not configured on the server. Contact the dashboard administrator.');
+            }
+            throw new Error(detail || `Could not start Todoist authorization (HTTP ${error.response.status}). Please try again.`);
+        }
+        throw error;
     }
-    window.location.assign(authorizationUrl);
 }
 
 /**
@@ -124,7 +146,7 @@ export async function connectTodoist() {
  * Resolves to { connected: boolean }.
  */
 export async function getTodoistConnectionStatus() {
-    const res = await api.get('/dashboard/todoist/connection-status');
+    const res = await api.get('/dashboard/todoist/auth/connection-status');
     return res.data;
 }
 

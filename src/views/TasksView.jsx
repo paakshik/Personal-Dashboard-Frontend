@@ -77,7 +77,9 @@ export default function TasksView({
                                       onFileUpload,
                                       isLoading,
                                       todoistConnected = false,
-                                      onConnectTodoist
+                                      onConnectTodoist,
+                                      todoistConnecting = false,
+                                      todoistConnectError = null
                                   }) {
     // State
     const [localTasks, setLocalTasks] = useState(tasks)
@@ -344,9 +346,10 @@ if (isLoading) {
                 <p style={styles.connectSubtitle}>
                     Connect your Todoist account to view and manage your tasks.
                 </p>
+                {todoistConnectError && <p role="alert">{todoistConnectError}</p>}
                 {onConnectTodoist && (
-                    <button onClick={onConnectTodoist} style={styles.connectButton}>
-                        Connect Todoist
+                    <button onClick={onConnectTodoist} disabled={todoistConnecting} style={styles.connectButton}>
+                        {todoistConnecting ? 'Connecting…' : 'Connect Todoist'}
                     </button>
                 )}
             </div>

@@ -20,21 +20,37 @@ export default function TodoistConnect() {
     const [status, setStatus] = useState('checking'); // 'checking' | 'connected' | 'disconnected' | 'failed' | 'reauth'
     const [loading, setLoading] = useState(true);
     const [connecting, setConnecting] = useState(false);
+    const [disconnecting, setDisconnecting] = useState(false);
     const [connectError, setConnectError] = useState(null);
+    const [callbackStatus] = useState(() => new URLSearchParams(window.location.search).get('todoist'));
 
     // Read immediate feedback from the OAuth callback redirect (?todoist=connected|error).
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const todoistParam = params.get('todoist');
-        if (todoistParam === 'connected') {
-            setStatus('connected');
-            setConnectError(null);
-            // Clean the query param from the URL without a page reload.
-            window.history.replaceState({}, document.title, window.location.pathname);
-        } else if (todoistParam === 'error') {
-            setStatus('failed');
-            setConnectError('Todoist authorization failed. Please try again.');
-            window.history.replaceState({}, document.title, window.location.pathname);
+        if (todoistParam === 'connected' || todoistParam === 'error') {
+            if (todoistParam === 'connected') {
+                setStatus('connected');
+                setConnectError(null);
+            } else {
+                setStatus('failed');
+                const reason = params.get('reason');
+                const messages = {
+                    token_exchange: 'Todoist approved access, but the backend could not exchange the authorization code. Check Render logs and verify the deployed OAuth credentials and token endpoint.',
+                    token_response: 'Todoist approved access, but the backend received an invalid token response. Check Render logs and the deployed OAuth credentials.',
+                    credential_save: 'Todoist approved access, but the backend could not save the encrypted connection. Check Render database availability and encryption-key configuration.',
+                };
+                setConnectError(messages[reason] || 'Todoist authorization failed. Check the application configuration and callback URL, then try again.');
+            }
+            // Remove only the recognized status parameter; preserve unrelated query/hash state.
+            params.delete('todoist');
+            params.delete('reason');
+            const query = params.toString();
+            window.history.replaceState(
+                {},
+                document.title,
+                `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`,
+            );
         }
     }, []);
 
@@ -44,10 +60,22 @@ export default function TodoistConnect() {
             try {
                 const data = await getTodoistConnectionStatus();
                 if (!cancelled) {
-                    setStatus(!!data.connected ? 'connected' : 'disconnected');
+                    if (data.connected) {
+                        setStatus('connected');
+                    } else if (callbackStatus === 'connected') {
+                        setStatus('failed');
+                        setConnectError('Todoist returned successfully, but the backend reports no saved connection. The backend may still be running older code; inspect Render callback logs and redeploy the current backend.');
+                    } else {
+                        setStatus(callbackStatus === 'error' ? 'failed' : 'disconnected');
+                    }
                 }
-            } catch {
-                if (!cancelled) setStatus('disconnected');
+            } catch (error) {
+                if (!cancelled) {
+                    setStatus(error.response?.status === 401 ? 'reauth' : callbackStatus === 'error' ? 'failed' : 'disconnected');
+                    if (error.response?.status === 401) {
+                        setConnectError('Your dashboard session has expired. Sign in again to check your Todoist connection.');
+                    }
+                }
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -59,27 +87,31 @@ export default function TodoistConnect() {
     }, []);
 
     const handleDisconnect = useCallback(async () => {
+        setDisconnecting(true);
+        setConnectError(null);
         try {
             await disconnectTodoist();
             setStatus('disconnected');
-        } catch {
-            setStatus('failed');
-            window.alert('Failed to disconnect Todoist. Please try again.');
+        } catch (error) {
+            setConnectError(error.response?.data?.error || error.message || 'Failed to disconnect Todoist. Please try again.');
+        } finally {
+            setDisconnecting(false);
         }
     }, []);
 
     const handleConnect = useCallback(async () => {
+        if (connecting || disconnecting) return;
         setConnecting(true);
         setConnectError(null);
         try {
             await connectTodoist();
         } catch (error) {
-            setConnectError(error.message || 'Failed to start Todoist authorization. Please try again.');
-            setStatus('failed');
+            setConnectError(error.response?.data?.error || error.message || 'Failed to start Todoist authorization. Please try again.');
+            setStatus(error.response?.status === 401 || error.statusCode === 401 ? 'reauth' : 'failed');
         } finally {
             setConnecting(false);
         }
-    }, []);
+    }, [connecting, disconnecting]);
 
     if (loading) {
         return (
@@ -143,6 +175,7 @@ export default function TodoistConnect() {
 
             {connectError ? (
                 <span
+                    role="alert"
                     style={{
                         fontSize: '0.75rem',
                         color: '#dc2626',
@@ -156,14 +189,14 @@ export default function TodoistConnect() {
             {isConnected ? (
                 <button
                     onClick={handleDisconnect}
-                    disabled={connecting}
+                    disabled={connecting || disconnecting}
                     style={{
                         background: '#dc2626',
                         color: '#fff',
                         border: 'none',
                         padding: '8px 12px',
                         borderRadius: '6px',
-                        cursor: connecting ? 'not-allowed' : 'pointer',
+                        cursor: disconnecting ? 'not-allowed' : 'pointer',
                         fontSize: '0.9rem',
                         fontWeight: 600,
                         width: '100%',
@@ -171,11 +204,11 @@ export default function TodoistConnect() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '6px',
-                        opacity: connecting ? 0.6 : 1,
+                        opacity: disconnecting ? 0.6 : 1,
                     }}
                 >
                     <LogOut size={16}/>
-                    Disconnect Todoist
+                    {disconnecting ? 'Disconnecting…' : 'Disconnect Todoist'}
                 </button>
             ) : status === 'failed' || status === 'reauth' ? (
                 <>

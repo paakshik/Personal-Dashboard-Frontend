@@ -31,6 +31,18 @@ describe('api.jsx Todoist exports', () => {
 });
 
 describe('TodoistConnect', () => {
+    it('shows callback failure without hiding the status check result', async () => {
+        const originalUrl = window.location.href;
+        window.history.replaceState({}, '', '/?todoist=error&keep=1#section');
+        mockGetTodoistConnectionStatus.mockResolvedValue({connected: false});
+        render(<TodoistConnect/>);
+        await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/callback URL/i));
+        expect(screen.getByText('Connection Failed')).toBeInTheDocument();
+        expect(window.location.search).toBe('?keep=1');
+        expect(window.location.hash).toBe('#section');
+        window.history.replaceState({}, '', new URL(originalUrl).pathname);
+    });
+
     it('renders a Connect button when not connected', async () => {
         mockGetTodoistConnectionStatus.mockResolvedValue({connected: false});
         render(<TodoistConnect/>);
@@ -43,6 +55,22 @@ describe('TodoistConnect', () => {
         render(<TodoistConnect/>);
         await waitFor(() => expect(screen.getByText('Disconnect Todoist')).toBeInTheDocument());
         expect(screen.queryByText('Connect Todoist')).not.toBeInTheDocument();
+    });
+
+    it('disables Connect while OAuth initiation is pending and shows an actionable error', async () => {
+        mockGetTodoistConnectionStatus.mockResolvedValue({connected: false});
+        let rejectConnect;
+        mockConnectTodoist.mockImplementation(() => new Promise((_, reject) => {
+            rejectConnect = reject;
+        }));
+        render(<TodoistConnect/>);
+        const button = await screen.findByRole('button', {name: 'Connect Todoist'});
+        fireEvent.click(button);
+        expect(await screen.findByRole('button', {name: 'Connecting…'})).toBeDisabled();
+        fireEvent.click(screen.getByRole('button', {name: 'Connecting…'}));
+        expect(mockConnectTodoist).toHaveBeenCalledTimes(1);
+        rejectConnect(new Error('Dashboard session expired. Sign in again.'));
+        await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/sign in again/i));
     });
 
     it('calls connectTodoist when the Connect button is clicked', async () => {
@@ -59,18 +87,19 @@ describe('TodoistConnect', () => {
         await waitFor(() => expect(screen.getByText('Disconnect Todoist')).toBeInTheDocument());
         fireEvent.click(screen.getByText('Disconnect Todoist'));
         expect(mockDisconnectTodoist).toHaveBeenCalledTimes(1);
+        await waitFor(() => expect(screen.queryByText('Checking Todoist connection…')).not.toBeInTheDocument());
     });
 });
 
 describe('TasksView connection gate', () => {
     it('shows connection-gated UI when Todoist is not connected', () => {
-        render(<TasksView todoistConnected={false} onConnectTodoist={vi.fn()}/>);
-        expect(screen.getByText(/Connect your Todoist account/)).toBeInTheDocument();
+        render(<TasksView tasks={[]} todoistConnected={false} onConnectTodoist={vi.fn()} isLoading={false}/>);
+        expect(screen.getByRole('heading', {name: 'Connect your Todoist account'})).toBeInTheDocument();
         expect(screen.getByRole('button', {name: 'Connect Todoist'})).toBeInTheDocument();
     });
 
     it('does not show the connection-gated UI when Todoist is connected', () => {
-        render(<TasksView todoistConnected={true} tasks={[]} onConnectTodoist={vi.fn()}/>);
+        render(<TasksView todoistConnected={true} tasks={[]} onConnectTodoist={vi.fn()} isLoading={false}/>);
         expect(screen.queryByText(/Connect your Todoist account/)).not.toBeInTheDocument();
     });
 });
