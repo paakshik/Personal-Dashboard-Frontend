@@ -1,17 +1,37 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
-import {fireEvent, render, screen, waitFor, within} from '@testing-library/react';
+import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import AiView from '../views/aiview.jsx';
 
 vi.mock('../api', () => ({
     default: {get: vi.fn(), post: vi.fn(), delete: vi.fn()},
     getWebSocketTicketUrl: async () => 'ws://localhost:8000/dashboard/gemini/stream?ticket=test-ticket-123',
     API_BASE_URL: 'http://localhost:8000',
+    fetchConversations: vi.fn(),
+    fetchConversationMessages: vi.fn(),
 }));
 
 class MockWebSocket {
   static OPEN = 1;
-  constructor(url) { this.url = url; this.readyState = MockWebSocket.OPEN; MockWebSocket.instance = this; }
-  close() {}
+    static lastCloseCode = null;
+    static lastCloseReason = null;
+
+    constructor(url) {
+        this.url = url;
+        this.readyState = MockWebSocket.OPEN;
+        this.onopen = null;
+        this.onmessage = null;
+        this.onerror = null;
+        this.onclose = null;
+        MockWebSocket.instance = this;
+    }
+
+    close(code, reason) {
+        MockWebSocket.lastCloseCode = code;
+        MockWebSocket.lastCloseReason = reason ?? '';
+        if (this.onclose) {
+            this.onclose({code, reason: reason ?? '', wasClean: code === 1000});
+        }
+    }
   send(data) { this.sent = data; }
 }
 
@@ -19,6 +39,9 @@ beforeEach(() => {
   localStorage.setItem('token', 'test-jwt');
   globalThis.WebSocket = MockWebSocket;
   Element.prototype.scrollIntoView = vi.fn();
+    MockWebSocket.instance = null;
+    MockWebSocket.lastCloseCode = null;
+    MockWebSocket.lastCloseReason = null;
 });
 
 describe('AI chat view', () => {
@@ -74,4 +97,64 @@ describe('AI chat view', () => {
     MockWebSocket.instance.onmessage({ data: JSON.stringify({ type: 'error', message: 'Gemini API quota or rate limit reached.' }) });
     expect(await screen.findByText('Gemini API quota or rate limit reached.')).toBeTruthy();
   });
+
+    it('renders without ReferenceError', async () => {
+        const axiosInstance = {get: vi.fn().mockResolvedValue({data: []}), post: vi.fn(), delete: vi.fn()};
+        render(<AiView axiosInstance={axiosInstance}/>);
+        await waitFor(() => expect(MockWebSocket.instance).toBeDefined());
+    });
+
+    it('ordinary rerender preserves active socket', async () => {
+        const axiosInstance = {get: vi.fn().mockResolvedValue({data: []}), post: vi.fn(), delete: vi.fn()};
+        const {rerender} = render(<AiView axiosInstance={axiosInstance}/>);
+        await waitFor(() => expect(MockWebSocket.instance).toBeDefined());
+        const firstInstance = MockWebSocket.instance;
+        MockWebSocket.instance.onopen();
+        rerender(<AiView axiosInstance={axiosInstance}/>);
+        expect(MockWebSocket.instance).toBe(firstInstance);
+    });
+
+    it('unexpected close schedules one reconnect with backoff', async () => {
+        const axiosInstance = {get: vi.fn().mockResolvedValue({data: []}), post: vi.fn(), delete: vi.fn()};
+        render(<AiView axiosInstance={axiosInstance}/>);
+        await waitFor(() => expect(MockWebSocket.instance).toBeDefined());
+        MockWebSocket.instance.onopen();
+
+        const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+        setTimeoutSpy.mockClear();
+
+        act(() => {
+            MockWebSocket.instance.onclose({code: 1006, reason: '', wasClean: false});
+        });
+
+        expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('unmount cancels pending reconnect', async () => {
+        const axiosInstance = {get: vi.fn().mockResolvedValue({data: []}), post: vi.fn(), delete: vi.fn()};
+        const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+        const {unmount} = render(<AiView axiosInstance={axiosInstance}/>);
+        await waitFor(() => expect(MockWebSocket.instance).toBeDefined());
+        MockWebSocket.instance.onopen();
+        act(() => {
+            MockWebSocket.instance.onclose({code: 1006, reason: '', wasClean: false});
+        });
+        unmount();
+        expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
+
+    it('successful connection resets reconnect attempts', async () => {
+        const axiosInstance = {get: vi.fn().mockResolvedValue({data: []}), post: vi.fn(), delete: vi.fn()};
+        const {unmount} = render(<AiView axiosInstance={axiosInstance}/>);
+        await waitFor(() => expect(MockWebSocket.instance).toBeDefined());
+        act(() => {
+            MockWebSocket.instance.onclose({code: 1006, reason: '', wasClean: false});
+        });
+        expect(await screen.findByText('Disconnected')).toBeTruthy();
+        act(() => {
+            MockWebSocket.instance.onopen();
+        });
+        expect(await screen.findByText('Connected')).toBeTruthy();
+        unmount();
+    });
 });
