@@ -73,19 +73,19 @@ const segregateAndSortTasks = (tasks, groupByLabel) => {
 };
 
 export default function TasksView({
-                                      tasks = [],
-                                      refreshData: _refreshData,
-                                      onFileUpload,
-                                      isLoading,
-                                      todoistConnected = false,
-                                      onConnectTodoist,
-                                      todoistConnecting = false,
-                                      todoistConnectError = null,
-                                      todoistStatusLoading = false,
-                                      todoistTaskLoading = false,
-                                      todoistError = null,
-                                      onRetryTodoist
-                                  }) {
+    tasks = [],
+    refreshData: _refreshData,
+    onFileUpload,
+    isLoading,
+    todoistConnected = false,
+    onConnectTodoist,
+    todoistConnecting = false,
+    todoistConnectError = null,
+    todoistStatusLoading = false,
+    todoistTaskLoading = false,
+    todoistError = null,
+    onRetryTodoist,
+}) {
     // State
     const [localTasks, setLocalTasks] = useState(tasks)
     const [loading, setLoading] = useState(false)
@@ -119,6 +119,7 @@ export default function TasksView({
     const refreshTasks = async () => {
     try {
         const res = await api.get('/dashboard/todoist');
+        if (!Array.isArray(res.data)) throw new Error('Todoist returned an invalid task list.');
         setLocalTasks(res.data);
         if (_refreshData) await _refreshData();
     } catch (error) {
@@ -360,6 +361,7 @@ if (isLoading) {
     return (
 
         <div style={styles.container}>
+
             {todoistStatusLoading && <div role="status" style={styles.taskNotice}>Checking Todoist connection…</div>}
             {todoistTaskLoading && <div role="status" style={styles.taskNotice}>Refreshing Todoist tasks…</div>}
             {todoistError && <div role="alert" style={styles.taskError}><span>{todoistError}</span>
@@ -614,7 +616,10 @@ const styles = {
         background: 'transparent',
         color: '#334155'
     },
-    // Todoist connection gat
+    // Todoist connection state notices
+    taskNotice: {padding: '10px 12px', marginBottom: '12px', color: '#475467', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem'},
+    taskError: {display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '12px', marginBottom: '12px', color: '#9a3412', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px', fontSize: '0.88rem'},
+    retryButton: {flexShrink: 0, padding: '6px 11px', border: '1px solid #fdba74', borderRadius: '7px', color: '#9a3412', background: '#fff', fontWeight: 600, cursor: 'pointer'},
     connectContainer: {
         display: 'flex',
         flexDirection: 'column',

@@ -45,19 +45,20 @@ function App() {
         ]);
         const values = requests.map((result) => result.status === 'fulfilled' ? result.value.data : null);
         if (values[0] !== null) setEvents(values[0]);
-        if (values[1] !== null) {
-            setTasks(Array.isArray(values[1]) ? values[1] : []);
+        if (values[1] !== null && Array.isArray(values[1])) {
+            setTasks(values[1]);
             setTodoistError(null);
-        } else {
+        } else if (values[1] === null) {
             const taskFailure = requests[1].reason;
-            const status = taskFailure?.response?.status;
-            if (status === 401 || status === 403) {
+            if (taskFailure?.response?.status === 403) {
                 setTodoistConnected(false);
                 setTasks([]);
-                setTodoistError(taskFailure?.response?.data?.detail || 'Todoist is not connected. Connect Todoist to view your tasks.');
+                setTodoistError(null);
             } else {
-                setTodoistError(taskFailure?.response?.data?.detail || 'Todoist is temporarily unavailable. Previously loaded tasks are preserved. Retry to try again.');
+                setTodoistError('Todoist is temporarily unavailable. Previously loaded tasks are preserved. Retry to try again.');
             }
+        } else {
+            setTodoistError('Todoist returned an invalid task list. Previously loaded tasks are preserved.');
         }
         setTodoistTaskLoading(false);
         if (values[2] !== null) setEmails(values[2]);
@@ -74,8 +75,14 @@ function App() {
             const data = await getTodoistConnectionStatus();
             setTodoistConnected(!!data.connected);
             if (!data.connected) setTasks([]);
-        } catch {
-            setTodoistError('Todoist connection status is temporarily unavailable. Retry to check your connection.');
+        } catch (error) {
+            if (error.response?.status === 404) {
+                setTodoistConnected(false);
+                setTasks([]);
+                setTodoistError(null);
+            } else {
+                setTodoistError('Todoist connection status is temporarily unavailable. Retry to check your connection.');
+            }
         } finally {
             setTodoistStatusLoading(false);
         }
@@ -95,10 +102,11 @@ function App() {
         if (viewName === 'tasks') setTodoistTaskLoading(true);
         try {
             const response = await api.get(request[0]);
+            if (viewName === 'tasks' && !Array.isArray(response.data)) throw new Error('Invalid Todoist task response');
             request[1](response.data);
             if (viewName === 'tasks') {
                 setTodoistError(null);
-                await fetchTodoistConnectionStatus();
+                setTodoistConnected(true);
             }
         } catch (error) {
             if (viewName === 'tasks') {

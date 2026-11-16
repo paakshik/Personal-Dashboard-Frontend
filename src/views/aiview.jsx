@@ -222,8 +222,13 @@ export default function AiView({axiosInstance, refreshData}) {
                     } else if (event.type === 'done') {
                         setBusy(false);
                         setMessages((previous) => previous.map((message) => ({...message, streaming: false})));
+                    } else if (event.type === 'persistence_error') {
+                        setBusy(false);
+                        setMessages((previous) => previous.map((message) => ({...message, streaming: false})));
+                        pushMessage('assistant', event.message || 'The reply was generated but could not be saved to history.');
                     } else if (event.type === 'error') {
                         setBusy(false);
+                        if (event.conversation_id) setActiveConversationId(event.conversation_id);
                         setMessages((previous) => [
                             ...previous.map((message) => ({...message, streaming: false})),
                             {
@@ -415,9 +420,14 @@ export default function AiView({axiosInstance, refreshData}) {
             >
                 <div className="nx-drawer-head">
                     <h2><Clock size={16}/> History</h2>
-                    <button type="button" className="nx-ghost" onClick={clearHistory} disabled={!messages.length}>
-                        <Trash2 size={14}/> Clear history
-                    </button>
+                    <div className="nx-drawer-actions">
+                        <button type="button" className="nx-ghost" onClick={clearHistory} disabled={!messages.length}>
+                            <Trash2 size={14}/> Clear history
+                        </button>
+                        <button type="button" className="nx-drawer-close" aria-label="Close conversation history" title="Close history" onClick={() => setHistoryOpen(false)}>
+                            <X size={17}/>
+                        </button>
+                    </div>
                 </div>
                 {conversationsError && <p className="nx-muted" role="alert">{conversationsError}</p>}
                 {conversationsLoading ? (
